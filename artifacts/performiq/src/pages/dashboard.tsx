@@ -1,7 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { useGetDashboard } from "@workspace/api-client-react";
 import { PageHeader, Card, StatusBadge, EmptyState } from "@/components/shared";
-import { Users, Target, ClipboardList, TrendingUp, Calendar, AlertCircle } from "lucide-react";
+import { Users, Target, ClipboardList, TrendingUp, Calendar, ShieldCheck } from "lucide-react";
 import { Link } from "wouter";
 import { format } from "date-fns";
 
@@ -34,14 +34,30 @@ export default function Dashboard() {
       />
 
       {/* Role specific stat grids */}
+      {/* Admin: Awaiting Approval alert banner */}
+      {user?.role === 'admin' && (stats as any).awaitingApproval > 0 && (
+        <Link href="/appraisals" className="block">
+          <div className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-200 rounded-2xl cursor-pointer hover:bg-purple-100 transition-colors">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-5 h-5 text-purple-600" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-purple-800">
+                {(stats as any).awaitingApproval} appraisal{(stats as any).awaitingApproval !== 1 ? 's' : ''} awaiting your approval
+              </p>
+              <p className="text-sm text-purple-600">Manager reviews are complete — click to review and approve</p>
+            </div>
+            <span className="text-sm font-medium text-purple-700 underline">Review →</span>
+          </div>
+        </Link>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <StatCard title="Pending Appraisals" value={stats.pendingAppraisals} icon={ClipboardList} colorClass="bg-amber-100 text-amber-600" />
+        <StatCard title="Awaiting Approval" value={(stats as any).awaitingApproval ?? '-'} icon={ShieldCheck} colorClass="bg-purple-100 text-purple-600" />
         <StatCard title="Completed Reviews" value={stats.completedAppraisals} icon={TrendingUp} colorClass="bg-emerald-100 text-emerald-600" />
         <StatCard title="Active Goals" value={stats.activeGoals} icon={Target} colorClass="bg-blue-100 text-blue-600" />
         
-        {user?.role === 'admin' && (
-          <StatCard title="Total Employees" value={stats.totalEmployees} icon={Users} colorClass="bg-purple-100 text-purple-600" />
-        )}
         {user?.role === 'manager' && (
           <StatCard title="Team Size" value={stats.teamSize} icon={Users} colorClass="bg-purple-100 text-purple-600" />
         )}

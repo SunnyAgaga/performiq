@@ -14,6 +14,7 @@ router.get("/dashboard", requireAuth, async (req: AuthRequest, res) => {
       const [mgrCount] = await db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "manager"));
       const [activeCount] = await db.select({ count: count() }).from(cyclesTable).where(eq(cyclesTable.status, "active"));
       const [pendingCount] = await db.select({ count: count() }).from(appraisalsTable).where(eq(appraisalsTable.status, "pending"));
+      const [awaitingApprovalCount] = await db.select({ count: count() }).from(appraisalsTable).where(eq(appraisalsTable.status, "pending_approval"));
       const [completedCount] = await db.select({ count: count() }).from(appraisalsTable).where(eq(appraisalsTable.status, "completed"));
       const [myGoals] = await db.select({ count: count() }).from(goalsTable);
       const [activeGoals] = await db.select({ count: count() }).from(goalsTable).where(eq(goalsTable.status, "in_progress"));
@@ -37,6 +38,7 @@ router.get("/dashboard", requireAuth, async (req: AuthRequest, res) => {
         totalManagers: Number(mgrCount.count),
         activeCycles: Number(activeCount.count),
         pendingAppraisals: Number(pendingCount.count),
+        awaitingApproval: Number(awaitingApprovalCount.count),
         completedAppraisals: Number(completedCount.count),
         myGoals: Number(myGoals.count),
         activeGoals: Number(activeGoals.count),

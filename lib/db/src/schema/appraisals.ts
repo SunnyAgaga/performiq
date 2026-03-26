@@ -6,6 +6,7 @@ export const appraisalStatusEnum = pgEnum("appraisal_status", [
   "pending",
   "self_review",
   "manager_review",
+  "pending_approval",
   "completed",
 ]);
 

@@ -119,7 +119,7 @@ router.put("/appraisals/:id", requireAuth, async (req: AuthRequest, res) => {
       }
       const allScores = await db.select().from(appraisalScoresTable).where(eq(appraisalScoresTable.appraisalId, Number(req.params.id)));
       const managerScores = allScores.filter(s => s.managerScore != null).map(s => Number(s.managerScore));
-      if (managerScores.length > 0 && status === "completed") {
+      if (managerScores.length > 0 && (status === "pending_approval" || status === "completed")) {
         updates.overallScore = String(managerScores.reduce((a, b) => a + b, 0) / managerScores.length);
       }
     }

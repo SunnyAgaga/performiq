@@ -4,7 +4,7 @@ import { useGetAppraisal, useUpdateAppraisal } from "@workspace/api-client-react
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Label } from "@/components/shared";
 import { useAuth } from "@/hooks/use-auth";
-import { CheckCircle2, User, Star, FileText } from "lucide-react";
+import { CheckCircle2, User, Star, FileText, ShieldCheck, ThumbsUp } from "lucide-react";
 
 export default function AppraisalDetail() {
   const [, params] = useRoute("/appraisals/:id");
@@ -44,6 +44,7 @@ export default function AppraisalDetail() {
 
   const isSelfReviewActive = appraisal.status === 'self_review' && user?.id === appraisal.employeeId;
   const isManagerReviewActive = appraisal.status === 'manager_review' && (user?.id === appraisal.reviewerId || user?.role === 'admin');
+  const isPendingAdminApproval = appraisal.status === 'pending_approval' && user?.role === 'admin';
   const canEdit = isSelfReviewActive || isManagerReviewActive;
 
   const handleScoreChange = (criterionId: number, field: 'score' | 'note', value: any) => {
@@ -67,7 +68,7 @@ export default function AppraisalDetail() {
       if (action === 'submit') payload.status = 'manager_review';
     } else {
       payload.managerComment = generalComment;
-      if (action === 'submit') payload.status = 'completed';
+      if (action === 'submit') payload.status = 'pending_approval';
     }
 
     updateMutation.mutate(
@@ -245,6 +246,49 @@ export default function AppraisalDetail() {
           </div>
         )}
       </Card>
+
+      {/* Admin Approval Section */}
+      {isPendingAdminApproval && (
+        <Card className="p-6 mb-8 border-purple-200 bg-purple-50/40">
+          <h3 className="text-xl font-bold mb-2 flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-purple-600" />
+            Admin Review &amp; Approval
+          </h3>
+          <p className="text-sm text-muted-foreground mb-6">
+            The manager has submitted their review. All self and manager scores are visible below.
+            Review the full appraisal and approve to mark it as complete.
+          </p>
+
+          <div className="grid md:grid-cols-3 gap-4 mb-6">
+            {appraisal.scores.map(s => (
+              <div key={s.id} className="bg-background rounded-xl p-4 border border-border text-sm">
+                <p className="font-semibold mb-2">{s.criterion?.name}</p>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Self: <strong className="text-foreground">{s.selfScore ?? '—'}</strong></span>
+                  <span>Manager: <strong className="text-foreground">{s.managerScore ?? '—'}</strong></span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              className="bg-purple-600 hover:bg-purple-700 text-white gap-2"
+              isLoading={updateMutation.isPending}
+              onClick={() => {
+                if (confirm('Approve this appraisal? This will mark it as completed.')) {
+                  updateMutation.mutate(
+                    { id: appraisalId, data: { status: 'completed' } as any },
+                    { onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/appraisals/${appraisalId}`] }) }
+                  );
+                }
+              }}
+            >
+              <ThumbsUp className="w-4 h-4" /> Approve &amp; Complete
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Actions */}
       {canEdit && (
