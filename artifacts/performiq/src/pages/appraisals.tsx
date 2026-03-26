@@ -19,7 +19,7 @@ export default function Appraisals() {
   const createMutation = useCreateAppraisal({ request: { headers } });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({ cycleId: "", employeeId: "", workflowType: "admin_approval" });
+  const [formData, setFormData] = useState({ cycleId: "", employeeId: "", reviewerId: "", workflowType: "admin_approval" });
 
   const WORKFLOW_OPTIONS = [
     { value: "self_only",      label: "Self Only",           desc: "Employee self-review → Completed" },
@@ -27,14 +27,23 @@ export default function Appraisals() {
     { value: "admin_approval", label: "Full Approval",       desc: "Self-review → Manager review → Admin approval → Completed" },
   ];
 
+  const needsReviewer = formData.workflowType !== "self_only";
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const payload: any = {
+      cycleId: parseInt(formData.cycleId),
+      employeeId: parseInt(formData.employeeId),
+      workflowType: formData.workflowType,
+    };
+    if (needsReviewer && formData.reviewerId) payload.reviewerId = parseInt(formData.reviewerId);
     createMutation.mutate(
-      { data: { cycleId: parseInt(formData.cycleId), employeeId: parseInt(formData.employeeId), workflowType: formData.workflowType } as any },
+      { data: payload },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ["/api/appraisals"] });
           setIsDialogOpen(false);
+          setFormData({ cycleId: "", employeeId: "", reviewerId: "", workflowType: "admin_approval" });
         }
       }
     );
@@ -142,6 +151,22 @@ export default function Appraisals() {
                   ))}
                 </select>
               </div>
+              {needsReviewer && (
+                <div>
+                  <Label>Assign Reviewer</Label>
+                  <select
+                    className="w-full px-4 py-2.5 rounded-xl bg-background border border-border outline-none focus:ring-2 focus:ring-primary/20"
+                    value={formData.reviewerId}
+                    onChange={e => setFormData({...formData, reviewerId: e.target.value})}
+                    required={needsReviewer}
+                  >
+                    <option value="">-- Choose reviewer --</option>
+                    {users?.filter(u => (u.role === 'manager' || u.role === 'admin') && u.id !== parseInt(formData.employeeId)).map(u => (
+                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <Label>Review Route</Label>
                 <div className="space-y-2 mt-1">

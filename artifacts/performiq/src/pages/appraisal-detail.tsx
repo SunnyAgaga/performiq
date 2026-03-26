@@ -79,9 +79,42 @@ export default function AppraisalDetail() {
     );
   };
 
+  // Compute a contextual notice for the current viewer
+  const statusNotice = (() => {
+    if (appraisal.status === 'self_review') {
+      if (user?.id === appraisal.employeeId)
+        return { color: 'amber', text: 'Your turn — fill in your self-evaluation below and click Submit Review when done.' };
+      return { color: 'blue', text: `Waiting for ${appraisal.employee.name} to complete their self-evaluation.` };
+    }
+    if (appraisal.status === 'manager_review') {
+      if (isManagerReviewActive)
+        return { color: 'blue', text: `Your turn — review ${appraisal.employee.name}'s self-evaluation and fill in your manager scores below.` };
+      return { color: 'blue', text: `Waiting for ${appraisal.reviewer?.name || 'the reviewer'} to complete their manager review.` };
+    }
+    if (appraisal.status === 'pending_approval')
+      return { color: 'purple', text: 'Waiting for admin approval. Review the scores below and click Approve & Complete.' };
+    if (appraisal.status === 'completed')
+      return { color: 'green', text: 'This appraisal has been completed.' };
+    return null;
+  })();
+
   return (
     <div className="max-w-4xl mx-auto">
       <PageHeader title="Appraisal Detail" />
+
+      {/* Status Notice Banner */}
+      {statusNotice && (
+        <div className={`mb-6 px-5 py-4 rounded-2xl border text-sm font-medium flex items-start gap-3
+          ${statusNotice.color === 'amber'  ? 'bg-amber-50 border-amber-200 text-amber-800'  :
+            statusNotice.color === 'blue'   ? 'bg-blue-50  border-blue-200  text-blue-800'   :
+            statusNotice.color === 'purple' ? 'bg-purple-50 border-purple-200 text-purple-800':
+                                              'bg-green-50  border-green-200 text-green-800'  }`}>
+          <span className="mt-0.5 text-lg leading-none">
+            {statusNotice.color === 'amber' ? '✏️' : statusNotice.color === 'blue' ? '⏳' : statusNotice.color === 'purple' ? '🔎' : '✅'}
+          </span>
+          {statusNotice.text}
+        </div>
+      )}
 
       {/* Header Info Card */}
       <Card className="p-6 mb-8 bg-gradient-to-br from-card to-muted/30">
