@@ -52,9 +52,13 @@ router.get("/users/:id", requireAuth, async (req, res) => {
 
 router.put("/users/:id", requireAuth, requireRole("admin"), async (req, res) => {
   try {
-    const { name, email, role, managerId, department, jobTitle } = req.body;
+    const { name, email, password, role, managerId, department, jobTitle } = req.body;
+    const updates: Record<string, any> = { name, email, role, managerId, department, jobTitle };
+    if (password && password.trim() !== "") {
+      updates.passwordHash = await bcrypt.hash(password, 10);
+    }
     const [user] = await db.update(usersTable)
-      .set({ name, email, role, managerId, department, jobTitle })
+      .set(updates)
       .where(eq(usersTable.id, Number(req.params.id)))
       .returning();
     if (!user) { res.status(404).json({ error: "User not found" }); return; }

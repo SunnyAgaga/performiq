@@ -23,7 +23,8 @@ export default function Users() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingId) {
-      const { password, ...updateData } = formData;
+      const updateData: any = { name: formData.name, email: formData.email, role: formData.role, department: formData.department, jobTitle: formData.jobTitle };
+      if (formData.password.trim() !== "") updateData.password = formData.password;
       updateMutation.mutate({ id: editingId, data: updateData }, {
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/users"] }); setIsDialogOpen(false); }
       });
@@ -95,7 +96,10 @@ export default function Users() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div><Label>Name</Label><Input value={formData.name} onChange={e=>setFormData({...formData, name: e.target.value})} required /></div>
               <div><Label>Email</Label><Input type="email" value={formData.email} onChange={e=>setFormData({...formData, email: e.target.value})} required /></div>
-              {!editingId && <div><Label>Password</Label><Input type="password" value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} required /></div>}
+              <div>
+                <Label>{editingId ? "New Password" : "Password"}</Label>
+                <Input type="password" placeholder={editingId ? "Leave blank to keep unchanged" : ""} value={formData.password} onChange={e=>setFormData({...formData, password: e.target.value})} required={!editingId} />
+              </div>
               <div>
                 <Label>Role</Label>
                 <select className="w-full px-4 py-2 border rounded-xl" value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value as any})}>
