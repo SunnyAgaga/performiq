@@ -9,7 +9,7 @@ router.get("/dashboard", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { id: userId, role } = req.user!;
 
-    if (role === "admin") {
+    if (role === "admin" || role === "super_admin") {
       const [empCount] = await db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "employee"));
       const [mgrCount] = await db.select({ count: count() }).from(usersTable).where(eq(usersTable.role, "manager"));
       const [activeCount] = await db.select({ count: count() }).from(cyclesTable).where(eq(cyclesTable.status, "active"));

@@ -70,7 +70,7 @@ function nextStatus(current: string, workflowType: string): string | null {
 
 router.post("/appraisals", requireAuth, async (req: AuthRequest, res) => {
   try {
-    if (!["admin", "manager"].includes(req.user!.role)) {
+    if (!["admin", "super_admin", "manager"].includes(req.user!.role)) {
       res.status(403).json({ error: "Forbidden" }); return;
     }
     const { cycleId, employeeId, reviewerId, workflowType } = req.body;
