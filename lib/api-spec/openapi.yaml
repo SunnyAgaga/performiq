@@ -1,22 +1,35 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: PerformIQ Employee Performance Appraisal API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: cycles
+    description: Appraisal cycles
+  - name: criteria
+    description: Rating criteria
+  - name: appraisals
+    description: Appraisal reviews
+  - name: goals
+    description: Goal tracking
+  - name: dashboard
+    description: Dashboard stats
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +37,499 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout current user
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current authenticated user
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (admin only)
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get a user by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    put:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /cycles:
+    get:
+      operationId: listCycles
+      tags: [cycles]
+      summary: List all appraisal cycles
+      responses:
+        "200":
+          description: List of cycles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AppraisalCycle"
+    post:
+      operationId: createCycle
+      tags: [cycles]
+      summary: Create a new appraisal cycle (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCycleRequest"
+      responses:
+        "201":
+          description: Cycle created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppraisalCycle"
+
+  /cycles/{id}:
+    get:
+      operationId: getCycle
+      tags: [cycles]
+      summary: Get a cycle by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cycle found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppraisalCycle"
+    put:
+      operationId: updateCycle
+      tags: [cycles]
+      summary: Update a cycle (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCycleRequest"
+      responses:
+        "200":
+          description: Cycle updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppraisalCycle"
+    delete:
+      operationId: deleteCycle
+      tags: [cycles]
+      summary: Delete a cycle (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Cycle deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /criteria:
+    get:
+      operationId: listCriteria
+      tags: [criteria]
+      summary: List all rating criteria
+      responses:
+        "200":
+          description: List of criteria
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Criterion"
+    post:
+      operationId: createCriterion
+      tags: [criteria]
+      summary: Create a criterion (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCriterionRequest"
+      responses:
+        "201":
+          description: Criterion created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Criterion"
+
+  /criteria/{id}:
+    put:
+      operationId: updateCriterion
+      tags: [criteria]
+      summary: Update a criterion (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCriterionRequest"
+      responses:
+        "200":
+          description: Criterion updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Criterion"
+    delete:
+      operationId: deleteCriterion
+      tags: [criteria]
+      summary: Delete a criterion (admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Criterion deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /appraisals:
+    get:
+      operationId: listAppraisals
+      tags: [appraisals]
+      summary: List appraisals (filtered by role)
+      parameters:
+        - name: cycleId
+          in: query
+          schema:
+            type: integer
+        - name: employeeId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of appraisals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Appraisal"
+    post:
+      operationId: createAppraisal
+      tags: [appraisals]
+      summary: Create an appraisal (admin/manager only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAppraisalRequest"
+      responses:
+        "201":
+          description: Appraisal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appraisal"
+
+  /appraisals/{id}:
+    get:
+      operationId: getAppraisal
+      tags: [appraisals]
+      summary: Get an appraisal with scores
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Appraisal detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppraisalDetail"
+    put:
+      operationId: updateAppraisal
+      tags: [appraisals]
+      summary: Submit self-review or manager review
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAppraisalRequest"
+      responses:
+        "200":
+          description: Appraisal updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppraisalDetail"
+
+  /goals:
+    get:
+      operationId: listGoals
+      tags: [goals]
+      summary: List goals (filtered by role)
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: integer
+        - name: cycleId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of goals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Goal"
+    post:
+      operationId: createGoal
+      tags: [goals]
+      summary: Create a goal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGoalRequest"
+      responses:
+        "201":
+          description: Goal created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+
+  /goals/{id}:
+    put:
+      operationId: updateGoal
+      tags: [goals]
+      summary: Update a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGoalRequest"
+      responses:
+        "200":
+          description: Goal updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Goal"
+    delete:
+      operationId: deleteGoal
+      tags: [goals]
+      summary: Delete a goal
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Goal deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /dashboard:
+    get:
+      operationId: getDashboard
+      tags: [dashboard]
+      summary: Get role-aware dashboard stats
+      responses:
+        "200":
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +537,432 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required: [email, password]
+
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        token:
+          type: string
+      required: [user, token]
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, employee]
+        managerId:
+          type: integer
+          nullable: true
+        department:
+          type: string
+          nullable: true
+        jobTitle:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, email, role, createdAt]
+
+    CreateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, employee]
+        managerId:
+          type: integer
+          nullable: true
+        department:
+          type: string
+          nullable: true
+        jobTitle:
+          type: string
+          nullable: true
+      required: [name, email, password, role]
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, employee]
+        managerId:
+          type: integer
+          nullable: true
+        department:
+          type: string
+          nullable: true
+        jobTitle:
+          type: string
+          nullable: true
+
+    AppraisalCycle:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [draft, active, closed]
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, startDate, endDate, status, createdAt]
+
+    CreateCycleRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [draft, active, closed]
+      required: [name, startDate, endDate, status]
+
+    Criterion:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+        weight:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, name, category, weight, createdAt]
+
+    CreateCriterionRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category:
+          type: string
+        weight:
+          type: number
+      required: [name, category, weight]
+
+    Appraisal:
+      type: object
+      properties:
+        id:
+          type: integer
+        cycleId:
+          type: integer
+        employeeId:
+          type: integer
+        reviewerId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [pending, self_review, manager_review, completed]
+        selfComment:
+          type: string
+          nullable: true
+        managerComment:
+          type: string
+          nullable: true
+        overallScore:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        employee:
+          $ref: "#/components/schemas/User"
+        reviewer:
+          $ref: "#/components/schemas/User"
+          nullable: true
+        cycle:
+          $ref: "#/components/schemas/AppraisalCycle"
+      required: [id, cycleId, employeeId, status, createdAt, employee, cycle]
+
+    AppraisalScore:
+      type: object
+      properties:
+        id:
+          type: integer
+        criterionId:
+          type: integer
+        selfScore:
+          type: number
+          nullable: true
+        managerScore:
+          type: number
+          nullable: true
+        selfNote:
+          type: string
+          nullable: true
+        managerNote:
+          type: string
+          nullable: true
+        criterion:
+          $ref: "#/components/schemas/Criterion"
+      required: [id, criterionId, criterion]
+
+    AppraisalDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        cycleId:
+          type: integer
+        employeeId:
+          type: integer
+        reviewerId:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: [pending, self_review, manager_review, completed]
+        selfComment:
+          type: string
+          nullable: true
+        managerComment:
+          type: string
+          nullable: true
+        overallScore:
+          type: number
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        employee:
+          $ref: "#/components/schemas/User"
+        reviewer:
+          $ref: "#/components/schemas/User"
+          nullable: true
+        cycle:
+          $ref: "#/components/schemas/AppraisalCycle"
+        scores:
+          type: array
+          items:
+            $ref: "#/components/schemas/AppraisalScore"
+      required: [id, cycleId, employeeId, status, createdAt, employee, cycle, scores]
+
+    CreateAppraisalRequest:
+      type: object
+      properties:
+        cycleId:
+          type: integer
+        employeeId:
+          type: integer
+        reviewerId:
+          type: integer
+          nullable: true
+      required: [cycleId, employeeId]
+
+    UpdateAppraisalRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, self_review, manager_review, completed]
+        selfComment:
+          type: string
+          nullable: true
+        managerComment:
+          type: string
+          nullable: true
+        scores:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreInput"
+
+    ScoreInput:
+      type: object
+      properties:
+        criterionId:
+          type: integer
+        selfScore:
+          type: number
+          nullable: true
+        managerScore:
+          type: number
+          nullable: true
+        selfNote:
+          type: string
+          nullable: true
+        managerNote:
+          type: string
+          nullable: true
+      required: [criterionId]
+
+    Goal:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: integer
+        cycleId:
+          type: integer
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [not_started, in_progress, completed, cancelled]
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        progress:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        user:
+          $ref: "#/components/schemas/User"
+      required: [id, userId, title, status, progress, createdAt, user]
+
+    CreateGoalRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        cycleId:
+          type: integer
+          nullable: true
+        userId:
+          type: integer
+          nullable: true
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        status:
+          type: string
+          enum: [not_started, in_progress, completed, cancelled]
+      required: [title]
+
+    UpdateGoalRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [not_started, in_progress, completed, cancelled]
+        dueDate:
+          type: string
+          format: date
+          nullable: true
+        progress:
+          type: integer
+
+    DashboardStats:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [admin, manager, employee]
+        totalEmployees:
+          type: integer
+          nullable: true
+        totalManagers:
+          type: integer
+          nullable: true
+        activeCycles:
+          type: integer
+          nullable: true
+        pendingAppraisals:
+          type: integer
+        completedAppraisals:
+          type: integer
+        myGoals:
+          type: integer
+        activeGoals:
+          type: integer
+        teamSize:
+          type: integer
+          nullable: true
+        recentAppraisals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Appraisal"
+        recentGoals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Goal"
+      required: [role, pendingAppraisals, completedAppraisals, myGoals, activeGoals, recentAppraisals, recentGoals]
