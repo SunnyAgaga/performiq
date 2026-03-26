@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, appraisalsTable, appraisalScoresTable, usersTable, cyclesTable, criteriaTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, or } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth";
 
 const router = Router();
@@ -35,10 +35,12 @@ router.get("/appraisals", requireAuth, async (req: AuthRequest, res) => {
     } else if (req.user!.role === "manager") {
       const teamMembers = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.managerId, req.user!.id));
       const memberIds = teamMembers.map(m => m.id);
+      // Managers see appraisals for their direct reports OR any appraisal where they are the assigned reviewer
+      const reviewerCondition = eq(appraisalsTable.reviewerId, req.user!.id);
       if (memberIds.length > 0) {
-        conditions.push(inArray(appraisalsTable.employeeId, memberIds));
+        conditions.push(or(inArray(appraisalsTable.employeeId, memberIds), reviewerCondition));
       } else {
-        res.json([]); return;
+        conditions.push(reviewerCondition);
       }
     }
 
