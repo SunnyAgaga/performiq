@@ -5,16 +5,15 @@ import { Users, Target, ClipboardList, TrendingUp, Calendar, ShieldCheck } from 
 import { Link } from "wouter";
 import { format } from "date-fns";
 
-export default function Dashboard() {
-  const { user } = useAuth();
-  const { data: stats, isLoading, isError } = useGetDashboard({
-    request: { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-  });
+interface StatCardProps {
+  title: string;
+  value: number | string | null | undefined;
+  icon: React.ComponentType<{ className?: string }>;
+  colorClass: string;
+}
 
-  if (isLoading) return <div className="animate-pulse space-y-8"><div className="h-10 w-1/3 bg-muted rounded-lg"></div><div className="grid grid-cols-1 md:grid-cols-3 gap-6"><div className="h-32 bg-muted rounded-2xl"></div><div className="h-32 bg-muted rounded-2xl"></div><div className="h-32 bg-muted rounded-2xl"></div></div></div>;
-  if (isError || !stats) return <div className="text-destructive">Failed to load dashboard</div>;
-
-  const StatCard = ({ title, value, icon: Icon, colorClass }: { title: string, value: number | string | null | undefined, icon: any, colorClass: string }) => (
+function StatCard({ title, value, icon: Icon, colorClass }: StatCardProps) {
+  return (
     <Card className="p-6 flex items-center gap-5">
       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${colorClass}`}>
         <Icon className="w-7 h-7" />
@@ -25,16 +24,37 @@ export default function Dashboard() {
       </div>
     </Card>
   );
+}
+
+export default function Dashboard() {
+  const { user } = useAuth();
+  const { data: stats, isLoading, isError } = useGetDashboard({
+    request: { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+  });
+
+  if (isLoading) return (
+    <div className="animate-pulse space-y-8">
+      <div className="h-10 w-1/3 bg-muted rounded-lg"></div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="h-32 bg-muted rounded-2xl"></div>
+        <div className="h-32 bg-muted rounded-2xl"></div>
+        <div className="h-32 bg-muted rounded-2xl"></div>
+      </div>
+    </div>
+  );
+
+  if (isError || !stats) return <div className="text-destructive">Failed to load dashboard</div>;
+
+  const recentAppraisals = stats.recentAppraisals ?? [];
+  const recentGoals = stats.recentGoals ?? [];
 
   return (
     <div className="space-y-8">
       <PageHeader 
-        title={`Welcome back, ${user?.name.split(' ')[0]}`} 
+        title={`Welcome back, ${(user?.name ?? user?.email ?? 'there').split(' ')[0]}`} 
         description="Here's what's happening with your performance metrics today."
       />
 
-      {/* Role specific stat grids */}
-      {/* Admin: Awaiting Approval alert banner */}
       {(user?.role === 'admin' || user?.role === 'super_admin') && (stats as any).awaitingApproval > 0 && (
         <Link href="/appraisals" className="block">
           <div className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-200 rounded-2xl cursor-pointer hover:bg-purple-100 transition-colors">
@@ -74,22 +94,22 @@ export default function Dashboard() {
             <Link href="/appraisals" className="text-sm font-medium text-primary hover:underline">View all</Link>
           </div>
           <div className="p-0 flex-1">
-            {stats.recentAppraisals.length === 0 ? (
+            {recentAppraisals.length === 0 ? (
               <EmptyState title="No recent appraisals" description="There are no appraisals requiring your attention right now." icon={ClipboardList} />
             ) : (
               <div className="divide-y divide-border">
-                {stats.recentAppraisals.map(app => (
+                {recentAppraisals.map(app => (
                   <Link key={app.id} href={`/appraisals/${app.id}`} className="flex items-center justify-between p-4 sm:p-6 hover:bg-muted/50 transition-colors block">
                     <div>
-                      <p className="font-semibold text-foreground">{app.employee.name}</p>
+                      <p className="font-semibold text-foreground">{(app as any).employee?.name ?? '—'}</p>
                       <p className="text-sm text-muted-foreground flex items-center gap-1.5 mt-1">
                         <Calendar className="w-3.5 h-3.5" />
-                        {app.cycle.name}
+                        {(app as any).cycle?.name ?? '—'}
                       </p>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <StatusBadge status={app.status} type="appraisal" />
-                      {app.overallScore !== null && (
+                      {app.overallScore !== null && app.overallScore !== undefined && (
                         <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-0.5 rounded">Score: {Number(app.overallScore).toFixed(1)}</span>
                       )}
                     </div>
@@ -110,24 +130,24 @@ export default function Dashboard() {
             <Link href="/goals" className="text-sm font-medium text-primary hover:underline">View all</Link>
           </div>
           <div className="p-0 flex-1">
-            {stats.recentGoals.length === 0 ? (
+            {recentGoals.length === 0 ? (
               <EmptyState title="No recent goals" description="Get started by creating a new performance goal." icon={Target} />
             ) : (
               <div className="divide-y divide-border">
-                {stats.recentGoals.map(goal => (
+                {recentGoals.map(goal => (
                   <Link key={goal.id} href={`/goals`} className="flex flex-col p-4 sm:p-6 hover:bg-muted/50 transition-colors block">
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <p className="font-semibold text-foreground line-clamp-1">{goal.title}</p>
-                        <p className="text-sm text-muted-foreground mt-0.5">For {goal.user.name}</p>
+                        <p className="text-sm text-muted-foreground mt-0.5">For {(goal as any).user?.name ?? (goal as any).user?.email ?? '—'}</p>
                       </div>
                       <StatusBadge status={goal.status} type="goal" />
                     </div>
                     <div className="w-full bg-secondary rounded-full h-2 mt-2 overflow-hidden">
-                      <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${goal.progress}%` }}></div>
+                      <div className="bg-blue-500 h-2 rounded-full transition-all duration-500" style={{ width: `${goal.progress ?? 0}%` }}></div>
                     </div>
                     <div className="flex justify-between items-center mt-2">
-                      <span className="text-xs font-medium text-muted-foreground">{goal.progress}% Complete</span>
+                      <span className="text-xs font-medium text-muted-foreground">{goal.progress ?? 0}% Complete</span>
                       {goal.dueDate && <span className="text-xs text-muted-foreground">Due: {format(new Date(goal.dueDate), 'MMM d, yyyy')}</span>}
                     </div>
                   </Link>

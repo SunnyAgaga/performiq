@@ -55,10 +55,10 @@ export default function Profile() {
       <Card className="p-6 mb-6">
         <div className="flex items-center gap-4 mb-6">
           <div className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold shadow-md">
-            {user.name.charAt(0).toUpperCase()}
+            {(user.name ?? user.email ?? 'U').charAt(0).toUpperCase()}
           </div>
           <div>
-            <h2 className="text-xl font-bold">{user.name}</h2>
+            <h2 className="text-xl font-bold">{user.name ?? user.email}</h2>
             <p className="text-muted-foreground">{user.email}</p>
           </div>
         </div>

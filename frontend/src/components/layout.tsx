@@ -20,36 +20,40 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { User } from "@/lib";
 
-export function AppLayout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth();
+const NAV_ITEMS = [
+  { name: "Dashboard",   path: "/dashboard",   icon: LayoutDashboard, roles: ["super_admin", "admin", "manager", "employee"] },
+  { name: "Appraisals",  path: "/appraisals",  icon: ClipboardList,   roles: ["super_admin", "admin", "manager", "employee"] },
+  { name: "Goals",       path: "/goals",        icon: Target,          roles: ["super_admin", "admin", "manager", "employee"] },
+  { name: "Cycles",      path: "/cycles",       icon: RefreshCcw,      roles: ["super_admin", "admin", "manager"] },
+  { name: "Criteria",    path: "/criteria",     icon: ListChecks,      roles: ["super_admin", "admin"] },
+  { name: "Reports",     path: "/reports",      icon: BarChart3,       roles: ["super_admin", "admin"] },
+  { name: "Users",       path: "/users",        icon: Users,           roles: ["super_admin", "admin"] },
+  { name: "Departments", path: "/departments",  icon: Building2,       roles: ["super_admin", "admin"] },
+  { name: "Roles",       path: "/roles",        icon: Shield,          roles: ["super_admin", "admin"] },
+];
+
+interface NavLinksProps {
+  user: User;
+  onNavigate: () => void;
+}
+
+function NavLinks({ user, onNavigate }: NavLinksProps) {
   const [location] = useLocation();
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const visibleItems = NAV_ITEMS.filter(item => item.roles.includes(user.role));
 
-  if (!user) return <>{children}</>;
-
-  const isAdmin = user.role === "admin" || user.role === "super_admin";
-
-  const navItems = [
-    { name: "Dashboard", path: "/dashboard", icon: LayoutDashboard, roles: ["super_admin", "admin", "manager", "employee"] },
-    { name: "Appraisals", path: "/appraisals", icon: ClipboardList, roles: ["super_admin", "admin", "manager", "employee"] },
-    { name: "Goals", path: "/goals", icon: Target, roles: ["super_admin", "admin", "manager", "employee"] },
-    { name: "Cycles", path: "/cycles", icon: RefreshCcw, roles: ["super_admin", "admin", "manager"] },
-    { name: "Criteria", path: "/criteria", icon: ListChecks, roles: ["super_admin", "admin"] },
-    { name: "Reports", path: "/reports", icon: BarChart3, roles: ["super_admin", "admin"] },
-    { name: "Users", path: "/users", icon: Users, roles: ["super_admin", "admin"] },
-    { name: "Departments", path: "/departments", icon: Building2, roles: ["super_admin", "admin"] },
-    { name: "Roles", path: "/roles", icon: Shield, roles: ["super_admin", "admin"] },
-  ];
-
-  const visibleNavItems = navItems.filter(item => item.roles.includes(user.role));
-
-  const NavLinks = () => (
+  return (
     <>
-      {visibleNavItems.map((item) => {
+      {visibleItems.map((item) => {
         const isActive = location === item.path || location.startsWith(`${item.path}/`);
         return (
-          <Link key={item.path} href={item.path} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${isActive ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`} onClick={() => setIsMobileMenuOpen(false)}>
+          <Link
+            key={item.path}
+            href={item.path}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${isActive ? 'bg-primary text-primary-foreground shadow-md shadow-primary/20' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+            onClick={onNavigate}
+          >
             <item.icon className={`w-5 h-5 ${isActive ? 'opacity-100' : 'opacity-70'}`} />
             {item.name}
           </Link>
@@ -57,6 +61,21 @@ export function AppLayout({ children }: { children: ReactNode }) {
       })}
     </>
   );
+}
+
+function userInitial(user: User): string {
+  return (user.name ?? user.email ?? "U").charAt(0).toUpperCase();
+}
+
+function userDisplayName(user: User): string {
+  return user.name ?? user.email ?? "Unknown";
+}
+
+export function AppLayout({ children }: { children: ReactNode }) {
+  const { user, logout } = useAuth();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  if (!user) return <>{children}</>;
 
   return (
     <div className="min-h-screen bg-background flex flex-col md:flex-row">
@@ -89,7 +108,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 <span className="font-display font-bold text-2xl tracking-tight text-foreground">PerformIQ</span>
               </div>
               <nav className="flex-1 space-y-1">
-                <NavLinks />
+                <NavLinks user={user} onNavigate={() => setIsMobileMenuOpen(false)} />
               </nav>
             </motion.div>
           </motion.div>
@@ -106,16 +125,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </div>
         
         <nav className="flex-1 space-y-1.5">
-          <NavLinks />
+          <NavLinks user={user} onNavigate={() => {}} />
         </nav>
 
         <div className="pt-6 border-t border-border mt-auto">
           <Link href="/profile" className="flex items-center gap-3 px-3 py-2 mb-2 rounded-xl hover:bg-muted transition-colors cursor-pointer">
             <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center text-secondary-foreground font-bold border border-border shrink-0">
-              {user.name.charAt(0).toUpperCase()}
+              {userInitial(user)}
             </div>
             <div className="overflow-hidden flex-1">
-              <p className="text-sm font-semibold text-foreground truncate">{user.name}</p>
+              <p className="text-sm font-semibold text-foreground truncate">{userDisplayName(user)}</p>
               <p className="text-xs text-muted-foreground capitalize truncate">
                 {user.role === "super_admin" ? (
                   <span className="inline-flex items-center gap-1 text-violet-600 font-semibold">⭐ Super Admin</span>
