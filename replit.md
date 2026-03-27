@@ -48,10 +48,9 @@ performiq/
 │   │   │   └── schema/     # Table definitions per domain
 │   │   └── routes/         # Express route handlers
 │   └── drizzle.config.ts   # Drizzle Kit config (points to src/db/schema)
-├── artifacts/              # Dev tooling only (mockup-sandbox)
 ├── README.md               # Project documentation
 ├── .gitignore
-├── pnpm-workspace.yaml     # pnpm workspace (frontend, backend, artifacts/*)
+├── pnpm-workspace.yaml     # pnpm workspace (frontend, backend)
 ├── tsconfig.base.json      # Shared TS options
 ├── tsconfig.json           # Root TS project references
 └── package.json            # Root package with hoisted devDeps
