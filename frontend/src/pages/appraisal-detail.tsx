@@ -4,7 +4,7 @@ import { useGetAppraisal, useUpdateAppraisal } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Label } from "@/components/shared";
 import { useAuth } from "@/hooks/use-auth";
-import { CheckCircle2, User, Star, FileText, ShieldCheck, ThumbsUp, ArrowRight } from "lucide-react";
+import { CheckCircle2, User, Star, FileText, ShieldCheck, ThumbsUp, ArrowRight, Users } from "lucide-react";
 
 const WORKFLOW_ROUTES: Record<string, { label: string; steps: string[] }> = {
   self_only:       { label: "Self Only",              steps: ["Self Review", "Completed"] },
@@ -48,9 +48,12 @@ export default function AppraisalDetail() {
 
   if (isLoading || !appraisal) return <div className="p-8 animate-pulse text-muted-foreground">Loading details...</div>;
 
+  const reviewers: any[] = (appraisal as any).reviewers ?? (appraisal.reviewer ? [appraisal.reviewer] : []);
+  const activeReviewer = reviewers.find((r: any) => r.stepStatus === 'in_progress') ?? null;
+  const isCurrentInProgressReviewer = activeReviewer?.id === user?.id;
   const isSelfReviewActive = appraisal.status === 'self_review' && user?.id === appraisal.employeeId;
-  const isManagerReviewActive = appraisal.status === 'manager_review' && (user?.id === appraisal.reviewerId || user?.role === 'admin');
-  const isPendingAdminApproval = appraisal.status === 'pending_approval' && user?.role === 'admin';
+  const isManagerReviewActive = appraisal.status === 'manager_review' && (isCurrentInProgressReviewer || user?.role === 'admin' || user?.role === 'super_admin');
+  const isPendingAdminApproval = appraisal.status === 'pending_approval' && (user?.role === 'admin' || user?.role === 'super_admin');
   const canEdit = isSelfReviewActive || isManagerReviewActive;
 
   const handleScoreChange = (criterionId: number, field: 'score' | 'note', value: any) => {
@@ -89,7 +92,10 @@ export default function AppraisalDetail() {
     if (appraisal.status === 'manager_review') {
       if (isManagerReviewActive)
         return { color: 'blue', text: `Your turn — review ${appraisal.employee?.name ?? 'the employee'}'s self-evaluation and fill in your manager scores below.` };
-      return { color: 'blue', text: `Waiting for ${appraisal.reviewer?.name || 'the reviewer'} to complete their manager review.` };
+      const activeName = activeReviewer?.name ?? 'the reviewer';
+      const completedCount = reviewers.filter((r: any) => r.stepStatus === 'completed').length;
+      const stepInfo = reviewers.length > 1 ? ` (step ${completedCount + 1} of ${reviewers.length})` : '';
+      return { color: 'blue', text: `Waiting for ${activeName}${stepInfo} to complete their review.` };
     }
     if (appraisal.status === 'pending_approval')
       return { color: 'purple', text: 'Waiting for admin approval. Review the scores below and click Approve & Complete.' };
@@ -132,6 +138,30 @@ export default function AppraisalDetail() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground">Cycle:</span>
               <span className="font-semibold">{appraisal.cycle.name}</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="text-sm font-medium text-muted-foreground flex items-center gap-1 mt-1 shrink-0">
+                <Users className="w-3.5 h-3.5" /> Review Chain:
+              </span>
+              <div className="flex flex-wrap gap-1 justify-end">
+                {reviewers.length > 0 ? reviewers.map((r: any, i: number) => {
+                  const isDone = r.stepStatus === 'completed';
+                  const isActive = r.stepStatus === 'in_progress';
+                  const isPending = r.stepStatus === 'pending';
+                  return (
+                    <span key={r.id} className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border
+                      ${isDone ? 'bg-green-100 text-green-700 border-green-200' :
+                        isActive ? 'bg-blue-100 text-blue-700 border-blue-300 ring-1 ring-blue-300' :
+                                   'bg-muted text-muted-foreground border-border'}`}>
+                      <span className="opacity-60 font-normal">{i + 1}.</span> {r.name}
+                      {isDone && <span>✓</span>}
+                      {isActive && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />}
+                    </span>
+                  );
+                }) : (
+                  <span className="text-sm text-muted-foreground">Unassigned</span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-muted-foreground">Status:</span>
