@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListGoals, useCreateGoal, useUpdateGoal, useDeleteGoal, useListUsers } from "@workspace/api-client-react";
+import { useListGoals, useCreateGoal, useUpdateGoal, useDeleteGoal, useListUsers } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Input, Label, EmptyState } from "@/components/shared";
 import { Target, Plus, X, Trash2, Edit2, CheckCircle2 } from "lucide-react";

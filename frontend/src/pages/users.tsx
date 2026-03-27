@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@workspace/api-client-react";
+import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, Button, Input, Label } from "@/components/shared";
 import { Users as UsersIcon, Plus, Edit, Trash2, X, Search, ChevronDown } from "lucide-react";

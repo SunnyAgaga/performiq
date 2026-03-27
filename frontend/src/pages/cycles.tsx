@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListCycles, useCreateCycle, useUpdateCycle, useDeleteCycle } from "@workspace/api-client-react";
+import { useListCycles, useCreateCycle, useUpdateCycle, useDeleteCycle } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Input, Label, EmptyState } from "@/components/shared";
 import { format } from "date-fns";

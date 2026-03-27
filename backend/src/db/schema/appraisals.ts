@@ -1,6 +1,4 @@
 import { pgTable, serial, integer, text, numeric, timestamp, pgEnum } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod/v4";
 
 export const appraisalStatusEnum = pgEnum("appraisal_status", [
   "pending",
@@ -39,7 +37,5 @@ export const appraisalScoresTable = pgTable("appraisal_scores", {
   managerNote: text("manager_note"),
 });
 
-export const insertAppraisalSchema = createInsertSchema(appraisalsTable).omit({ id: true, createdAt: true });
-export type InsertAppraisal = z.infer<typeof insertAppraisalSchema>;
 export type Appraisal = typeof appraisalsTable.$inferSelect;
 export type AppraisalScore = typeof appraisalScoresTable.$inferSelect;

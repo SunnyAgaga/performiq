@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useListAppraisals, useCreateAppraisal, useListCycles, useListUsers } from "@workspace/api-client-react";
+import { useListAppraisals, useCreateAppraisal, useListCycles, useListUsers } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, EmptyState, Label } from "@/components/shared";
 import { format } from "date-fns";

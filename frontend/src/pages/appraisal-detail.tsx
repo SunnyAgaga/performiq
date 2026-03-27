@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
-import { useGetAppraisal, useUpdateAppraisal } from "@workspace/api-client-react";
+import { useGetAppraisal, useUpdateAppraisal } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Label } from "@/components/shared";
 import { useAuth } from "@/hooks/use-auth";

@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
-import { useGetDashboard } from "@workspace/api-client-react";
+import { useGetDashboard } from "../lib";
 import { PageHeader, Card, StatusBadge, EmptyState } from "@/components/shared";
 import { Users, Target, ClipboardList, TrendingUp, Calendar, ShieldCheck } from "lucide-react";
 import { Link } from "wouter";

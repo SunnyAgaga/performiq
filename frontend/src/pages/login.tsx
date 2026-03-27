@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useLogin } from "@workspace/api-client-react";
+import { useLogin } from "../lib";
 import { Button, Input, Label } from "@/components/shared";
 import { AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
