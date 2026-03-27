@@ -25,6 +25,7 @@ export interface LoginRequest {
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export const UserRole = {
+  super_admin: "super_admin",
   admin: "admin",
   manager: "manager",
   employee: "employee",
@@ -36,6 +37,8 @@ export interface User {
   email: string;
   role: UserRole;
   managerId?: number | null;
+  customRoleId?: number | null;
+  customRole?: { id: number; name: string; permissionLevel: string } | null;
   department?: string | null;
   jobTitle?: string | null;
   createdAt: string;
@@ -50,6 +53,7 @@ export type CreateUserRequestRole =
   (typeof CreateUserRequestRole)[keyof typeof CreateUserRequestRole];
 
 export const CreateUserRequestRole = {
+  super_admin: "super_admin",
   admin: "admin",
   manager: "manager",
   employee: "employee",
@@ -60,6 +64,7 @@ export interface CreateUserRequest {
   email: string;
   password: string;
   role: CreateUserRequestRole;
+  customRoleId?: number | null;
   managerId?: number | null;
   department?: string | null;
   jobTitle?: string | null;
@@ -69,6 +74,7 @@ export type UpdateUserRequestRole =
   (typeof UpdateUserRequestRole)[keyof typeof UpdateUserRequestRole];
 
 export const UpdateUserRequestRole = {
+  super_admin: "super_admin",
   admin: "admin",
   manager: "manager",
   employee: "employee",
@@ -77,7 +83,9 @@ export const UpdateUserRequestRole = {
 export interface UpdateUserRequest {
   name?: string;
   email?: string;
+  password?: string;
   role?: UpdateUserRequestRole;
+  customRoleId?: number | null;
   managerId?: number | null;
   department?: string | null;
   jobTitle?: string | null;
@@ -140,6 +148,7 @@ export const AppraisalStatus = {
   pending: "pending",
   self_review: "self_review",
   manager_review: "manager_review",
+  pending_approval: "pending_approval",
   completed: "completed",
 } as const;
 
@@ -175,6 +184,7 @@ export const AppraisalDetailStatus = {
   pending: "pending",
   self_review: "self_review",
   manager_review: "manager_review",
+  pending_approval: "pending_approval",
   completed: "completed",
 } as const;
 
@@ -184,6 +194,7 @@ export interface AppraisalDetail {
   employeeId: number;
   reviewerId?: number | null;
   status: AppraisalDetailStatus;
+  workflowType?: string | null;
   selfComment?: string | null;
   managerComment?: string | null;
   overallScore?: number | null;
@@ -198,6 +209,7 @@ export interface CreateAppraisalRequest {
   cycleId: number;
   employeeId: number;
   reviewerId?: number | null;
+  workflowType?: string;
 }
 
 export type UpdateAppraisalRequestStatus =
@@ -207,6 +219,7 @@ export const UpdateAppraisalRequestStatus = {
   pending: "pending",
   self_review: "self_review",
   manager_review: "manager_review",
+  pending_approval: "pending_approval",
   completed: "completed",
 } as const;
 

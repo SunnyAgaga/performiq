@@ -23,7 +23,7 @@ export function Card({ children, className = "" }: { children: ReactNode, classN
   );
 }
 
-export function StatusBadge({ status, type = "default" }: { status: string, type?: "appraisal" | "goal" | "cycle" }) {
+export function StatusBadge({ status, type = "appraisal" }: { status: string, type?: "appraisal" | "goal" | "cycle" }) {
   let colorClass = "bg-gray-100 text-gray-700 border-gray-200";
   
   if (type === "appraisal") {
@@ -59,8 +59,12 @@ export function StatusBadge({ status, type = "default" }: { status: string, type
 }
 
 export function Button({ 
-  children, variant = "primary", className = "", isLoading = false, ...props 
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "outline" | "ghost" | "destructive", isLoading?: boolean }) {
+  children, variant = "primary", size = "md", className = "", isLoading = false, ...props 
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { 
+  variant?: "primary" | "secondary" | "outline" | "ghost" | "destructive";
+  size?: "sm" | "md" | "lg";
+  isLoading?: boolean;
+}) {
   const baseClass = "inline-flex items-center justify-center font-medium rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none active:scale-[0.98]";
   
   const variants = {
@@ -78,7 +82,7 @@ export function Button({
   };
 
   return (
-    <button className={`${baseClass} ${variants[variant]} ${sizes.md} ${className}`} disabled={isLoading || props.disabled} {...props}>
+    <button className={`${baseClass} ${variants[variant]} ${sizes[size]} ${className}`} disabled={isLoading || props.disabled} {...props}>
       {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
       {children}
     </button>

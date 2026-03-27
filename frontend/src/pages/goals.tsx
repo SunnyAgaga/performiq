@@ -11,7 +11,7 @@ export default function Goals() {
   const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
   
   const { data: goals, isLoading } = useListGoals({}, { request: { headers } });
-  const { data: users } = useListUsers({ request: { headers }, query: { enabled: user?.role !== 'employee' } });
+  const { data: users } = useListUsers({ request: { headers }, query: { enabled: user?.role !== 'employee' } as any });
 
   const createMutation = useCreateGoal({ request: { headers } });
   const updateMutation = useUpdateGoal({ request: { headers } });
@@ -98,7 +98,7 @@ export default function Goals() {
             </div>
             
             <h3 className="text-xl font-bold leading-tight mb-2">{goal.title}</h3>
-            {user?.role !== 'employee' && <p className="text-xs font-medium text-primary mb-3">Assignee: {goal.user.name}</p>}
+            {user?.role !== 'employee' && <p className="text-xs font-medium text-primary mb-3">Assignee: {goal.user?.name ?? goal.user?.email ?? 'Unknown'}</p>}
             <p className="text-sm text-muted-foreground line-clamp-2 mb-6 flex-1">{goal.description}</p>
             
             <div className="mt-auto">
