@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, criteriaTable } from "@workspace/db";
+import { db, criteriaTable } from "../db/index.js";
 import { eq } from "drizzle-orm";
 import { requireAuth, requireRole } from "../middlewares/auth";
 

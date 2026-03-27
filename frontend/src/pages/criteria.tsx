@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListCriteria, useCreateCriterion, useUpdateCriterion, useDeleteCriterion } from "@workspace/api-client-react";
+import { useListCriteria, useCreateCriterion, useUpdateCriterion, useDeleteCriterion } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, Button, Input, Label, EmptyState } from "@/components/shared";
 import { ListChecks, Plus, X, Trash2, Edit2 } from "lucide-react";

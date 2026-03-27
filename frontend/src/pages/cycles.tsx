@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListCycles, useCreateCycle, useUpdateCycle, useDeleteCycle } from "@workspace/api-client-react";
+import { useListCycles, useCreateCycle, useUpdateCycle, useDeleteCycle } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Input, Label, EmptyState } from "@/components/shared";
 import { format } from "date-fns";
@@ -47,8 +47,8 @@ export default function Cycles() {
     e.preventDefault();
     const payload = {
       ...formData,
-      startDate: new Date(formData.startDate),
-      endDate: new Date(formData.endDate)
+      startDate: new Date(formData.startDate).toISOString(),
+      endDate: new Date(formData.endDate).toISOString()
     };
 
     if (editingId) {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useRoute } from "wouter";
-import { useGetAppraisal, useUpdateAppraisal } from "@workspace/api-client-react";
+import { useGetAppraisal, useUpdateAppraisal } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Label } from "@/components/shared";
 import { useAuth } from "@/hooks/use-auth";
@@ -21,7 +21,7 @@ export default function AppraisalDetail() {
 
   const { data: appraisal, isLoading } = useGetAppraisal(appraisalId, {
     request: { headers },
-    query: { enabled: !!appraisalId }
+    query: { enabled: !!appraisalId } as any
   });
 
   const updateMutation = useUpdateAppraisal({ request: { headers } });
@@ -84,11 +84,11 @@ export default function AppraisalDetail() {
     if (appraisal.status === 'self_review') {
       if (user?.id === appraisal.employeeId)
         return { color: 'amber', text: 'Your turn — fill in your self-evaluation below and click Submit Review when done.' };
-      return { color: 'blue', text: `Waiting for ${appraisal.employee.name} to complete their self-evaluation.` };
+      return { color: 'blue', text: `Waiting for ${appraisal.employee?.name ?? 'the employee'} to complete their self-evaluation.` };
     }
     if (appraisal.status === 'manager_review') {
       if (isManagerReviewActive)
-        return { color: 'blue', text: `Your turn — review ${appraisal.employee.name}'s self-evaluation and fill in your manager scores below.` };
+        return { color: 'blue', text: `Your turn — review ${appraisal.employee?.name ?? 'the employee'}'s self-evaluation and fill in your manager scores below.` };
       return { color: 'blue', text: `Waiting for ${appraisal.reviewer?.name || 'the reviewer'} to complete their manager review.` };
     }
     if (appraisal.status === 'pending_approval')
@@ -121,11 +121,11 @@ export default function AppraisalDetail() {
         <div className="flex flex-col md:flex-row justify-between md:items-center gap-6">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-2xl font-bold shadow-md">
-              {appraisal.employee.name.charAt(0)}
+              {(appraisal.employee?.name ?? appraisal.employee?.email ?? "?").charAt(0).toUpperCase()}
             </div>
             <div>
-              <h2 className="text-2xl font-bold">{appraisal.employee.name}</h2>
-              <p className="text-muted-foreground">{appraisal.employee.jobTitle || 'Employee'} • {appraisal.employee.department}</p>
+              <h2 className="text-2xl font-bold">{appraisal.employee?.name ?? appraisal.employee?.email}</h2>
+              <p className="text-muted-foreground">{appraisal.employee?.jobTitle || 'Employee'} • {appraisal.employee?.department}</p>
             </div>
           </div>
           <div className="flex flex-col gap-2 items-start md:items-end bg-background p-4 rounded-xl border border-border shadow-sm">

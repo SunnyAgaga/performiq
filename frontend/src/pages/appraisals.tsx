@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useListAppraisals, useCreateAppraisal, useListCycles, useListUsers } from "@workspace/api-client-react";
+import { useListAppraisals, useCreateAppraisal, useListCycles, useListUsers } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, EmptyState, Label } from "@/components/shared";
 import { format } from "date-fns";
@@ -37,7 +37,7 @@ export default function Appraisals() {
     if (!appraisals) return [];
     return appraisals.filter(a => {
       const q = search.toLowerCase();
-      const matchSearch = !q || a.employee.name.toLowerCase().includes(q) || (a.employee.department ?? "").toLowerCase().includes(q);
+      const matchSearch = !q || (a.employee?.name ?? "").toLowerCase().includes(q) || (a.employee?.department ?? "").toLowerCase().includes(q);
       const matchStatus = !filterStatus || a.status === filterStatus;
       const matchCycle = !filterCycle || String(a.cycleId) === filterCycle;
       return matchSearch && matchStatus && matchCycle;
