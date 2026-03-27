@@ -37,5 +37,13 @@ export const appraisalScoresTable = pgTable("appraisal_scores", {
   managerNote: text("manager_note"),
 });
 
+export const appraisalReviewersTable = pgTable("appraisal_reviewers", {
+  id: serial("id").primaryKey(),
+  appraisalId: integer("appraisal_id").notNull(),
+  reviewerId: integer("reviewer_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type Appraisal = typeof appraisalsTable.$inferSelect;
 export type AppraisalScore = typeof appraisalScoresTable.$inferSelect;
+export type AppraisalReviewer = typeof appraisalReviewersTable.$inferSelect;

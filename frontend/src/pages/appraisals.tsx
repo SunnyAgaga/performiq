@@ -26,7 +26,8 @@ export default function Appraisals() {
   const createMutation = useCreateAppraisal({ request: { headers } });
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({ cycleId: "", employeeId: "", reviewerId: "", workflowType: "admin_approval" });
+  const [formData, setFormData] = useState({ cycleId: "", employeeId: "", workflowType: "admin_approval" });
+  const [selectedReviewerIds, setSelectedReviewerIds] = useState<number[]>([]);
 
   // Filters
   const [search, setSearch] = useState("");
@@ -54,21 +55,26 @@ export default function Appraisals() {
 
   const needsReviewer = formData.workflowType !== "self_only";
 
+  const toggleReviewer = (id: number) => {
+    setSelectedReviewerIds(prev => prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const payload: any = {
       cycleId: parseInt(formData.cycleId),
       employeeId: parseInt(formData.employeeId),
       workflowType: formData.workflowType,
+      reviewerIds: selectedReviewerIds,
     };
-    if (needsReviewer && formData.reviewerId) payload.reviewerId = parseInt(formData.reviewerId);
     createMutation.mutate(
       { data: payload },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: ["/api/appraisals"] });
           setIsDialogOpen(false);
-          setFormData({ cycleId: "", employeeId: "", reviewerId: "", workflowType: "admin_approval" });
+          setFormData({ cycleId: "", employeeId: "", workflowType: "admin_approval" });
+          setSelectedReviewerIds([]);
         }
       }
     );
@@ -169,7 +175,11 @@ export default function Appraisals() {
                       </div>
                     </td>
                     <td className="p-4 text-sm font-medium">{app.cycle.name}</td>
-                    <td className="p-4 hidden md:table-cell text-sm text-muted-foreground">{app.reviewer?.name || 'Unassigned'}</td>
+                    <td className="p-4 hidden md:table-cell text-sm text-muted-foreground">
+                      {(app as any).reviewers?.length > 0
+                        ? (app as any).reviewers.map((r: any) => r.name).join(', ')
+                        : 'Unassigned'}
+                    </td>
                     <td className="p-4"><StatusBadge status={app.status} type="appraisal" /></td>
                     <td className="p-4">
                       {app.overallScore !== null ? (
@@ -230,18 +240,36 @@ export default function Appraisals() {
               </div>
               {needsReviewer && (
                 <div>
-                  <Label>Assign Reviewer</Label>
-                  <select
-                    className="w-full px-4 py-2.5 rounded-xl bg-background border border-border outline-none focus:ring-2 focus:ring-primary/20"
-                    value={formData.reviewerId}
-                    onChange={e => setFormData({...formData, reviewerId: e.target.value})}
-                    required={needsReviewer}
-                  >
-                    <option value="">-- Choose reviewer --</option>
-                    {users?.filter(u => (u.role === 'manager' || u.role === 'admin' || u.role === 'super_admin') && u.id !== parseInt(formData.employeeId)).map(u => (
-                      <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
-                    ))}
-                  </select>
+                  <Label>Assign Reviewers <span className="text-muted-foreground font-normal">(select one or more)</span></Label>
+                  <div className="mt-2 border border-border rounded-xl overflow-hidden divide-y divide-border">
+                    {users?.filter(u => (u.role === 'manager' || u.role === 'admin' || u.role === 'super_admin') && u.id !== parseInt(formData.employeeId)).map(u => {
+                      const checked = selectedReviewerIds.includes(u.id);
+                      return (
+                        <label key={u.id} className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${checked ? 'bg-primary/5' : 'hover:bg-muted/40'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleReviewer(u.id)}
+                            className="accent-primary w-4 h-4 rounded"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{u.name}</p>
+                            <p className="text-xs text-muted-foreground">{u.role}{u.department ? ` · ${u.department}` : ''}</p>
+                          </div>
+                          {checked && <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Selected</span>}
+                        </label>
+                      );
+                    })}
+                    {!users?.filter(u => (u.role === 'manager' || u.role === 'admin' || u.role === 'super_admin') && u.id !== parseInt(formData.employeeId)).length && (
+                      <p className="px-4 py-3 text-sm text-muted-foreground">No eligible reviewers found.</p>
+                    )}
+                  </div>
+                  {needsReviewer && selectedReviewerIds.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1">Please select at least one reviewer.</p>
+                  )}
+                  {selectedReviewerIds.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">{selectedReviewerIds.length} reviewer{selectedReviewerIds.length > 1 ? 's' : ''} selected</p>
+                  )}
                 </div>
               )}
               <div>
