@@ -41,6 +41,10 @@ export const appraisalReviewersTable = pgTable("appraisal_reviewers", {
   id: serial("id").primaryKey(),
   appraisalId: integer("appraisal_id").notNull(),
   reviewerId: integer("reviewer_id").notNull(),
+  orderIndex: integer("order_index").notNull().default(0),
+  status: text("status").notNull().default("pending"), // pending | in_progress | completed
+  managerComment: text("manager_comment"),
+  reviewedAt: timestamp("reviewed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

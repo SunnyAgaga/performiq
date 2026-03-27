@@ -18,4 +18,16 @@ export const leaveRequestsTable = pgTable("leave_requests", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const leaveApproversTable = pgTable("leave_approvers", {
+  id: serial("id").primaryKey(),
+  leaveRequestId: integer("leave_request_id").notNull(),
+  approverId: integer("approver_id").notNull(),
+  orderIndex: integer("order_index").notNull().default(0),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected
+  note: text("note"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type LeaveRequest = typeof leaveRequestsTable.$inferSelect;
+export type LeaveApprover = typeof leaveApproversTable.$inferSelect;

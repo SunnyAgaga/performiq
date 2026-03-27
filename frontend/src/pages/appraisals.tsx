@@ -3,7 +3,7 @@ import { useListAppraisals, useCreateAppraisal, useListCycles, useListUsers } fr
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, EmptyState, Label } from "@/components/shared";
 import { format } from "date-fns";
-import { ClipboardList, Plus, X, Search, ChevronDown } from "lucide-react";
+import { ClipboardList, Plus, X, Search, ChevronDown, GripVertical, ArrowUp, ArrowDown, UserPlus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
 
@@ -27,7 +27,8 @@ export default function Appraisals() {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ cycleId: "", employeeId: "", workflowType: "admin_approval" });
-  const [selectedReviewerIds, setSelectedReviewerIds] = useState<number[]>([]);
+  // Each entry is a reviewer step in sequential order
+  const [reviewerSteps, setReviewerSteps] = useState<string[]>([""]); // array of user id strings
 
   // Filters
   const [search, setSearch] = useState("");
@@ -55,17 +56,26 @@ export default function Appraisals() {
 
   const needsReviewer = formData.workflowType !== "self_only";
 
-  const toggleReviewer = (id: number) => {
-    setSelectedReviewerIds(prev => prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]);
+  const addReviewerStep = () => setReviewerSteps(prev => [...prev, ""]);
+  const removeReviewerStep = (idx: number) => setReviewerSteps(prev => prev.filter((_, i) => i !== idx));
+  const moveReviewerStep = (idx: number, dir: -1 | 1) => {
+    setReviewerSteps(prev => {
+      const next = [...prev];
+      const tmp = next[idx]; next[idx] = next[idx + dir]; next[idx + dir] = tmp;
+      return next;
+    });
   };
+  const setReviewerAtStep = (idx: number, val: string) =>
+    setReviewerSteps(prev => prev.map((v, i) => i === idx ? val : v));
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const reviewerIds = needsReviewer ? reviewerSteps.map(Number).filter(Boolean) : [];
     const payload: any = {
       cycleId: parseInt(formData.cycleId),
       employeeId: parseInt(formData.employeeId),
       workflowType: formData.workflowType,
-      reviewerIds: selectedReviewerIds,
+      reviewerIds,
     };
     createMutation.mutate(
       { data: payload },
@@ -74,7 +84,7 @@ export default function Appraisals() {
           queryClient.invalidateQueries({ queryKey: ["/api/appraisals"] });
           setIsDialogOpen(false);
           setFormData({ cycleId: "", employeeId: "", workflowType: "admin_approval" });
-          setSelectedReviewerIds([]);
+          setReviewerSteps([""]);
         }
       }
     );
@@ -240,35 +250,53 @@ export default function Appraisals() {
               </div>
               {needsReviewer && (
                 <div>
-                  <Label>Assign Reviewers <span className="text-muted-foreground font-normal">(select one or more)</span></Label>
-                  <div className="mt-2 border border-border rounded-xl overflow-hidden divide-y divide-border">
-                    {users?.filter(u => (u.role === 'manager' || u.role === 'admin' || u.role === 'super_admin') && u.id !== parseInt(formData.employeeId)).map(u => {
-                      const checked = selectedReviewerIds.includes(u.id);
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Review Chain <span className="text-muted-foreground font-normal text-xs">(sequential — Step 1 reviews first)</span></Label>
+                  </div>
+                  <div className="space-y-2">
+                    {reviewerSteps.map((stepVal, idx) => {
+                      const eligible = users?.filter(u =>
+                        (u.role === 'manager' || u.role === 'admin' || u.role === 'super_admin') &&
+                        u.id !== parseInt(formData.employeeId) &&
+                        !reviewerSteps.some((v, i) => i !== idx && v === String(u.id))
+                      ) ?? [];
                       return (
-                        <label key={u.id} className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${checked ? 'bg-primary/5' : 'hover:bg-muted/40'}`}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => toggleReviewer(u.id)}
-                            className="accent-primary w-4 h-4 rounded"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{u.name}</p>
-                            <p className="text-xs text-muted-foreground">{u.role}{u.department ? ` · ${u.department}` : ''}</p>
-                          </div>
-                          {checked && <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">Selected</span>}
-                        </label>
+                        <div key={idx} className="flex items-center gap-2">
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold shrink-0">{idx + 1}</span>
+                          <select
+                            className="flex-1 px-3 py-2 rounded-xl bg-background border border-border text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                            value={stepVal}
+                            onChange={e => setReviewerAtStep(idx, e.target.value)}
+                          >
+                            <option value="">-- Select manager/admin --</option>
+                            {eligible.map(u => (
+                              <option key={u.id} value={String(u.id)}>{u.name} ({u.role})</option>
+                            ))}
+                          </select>
+                          <button type="button" onClick={() => moveReviewerStep(idx, -1)} disabled={idx === 0} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed" title="Move up">
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          </button>
+                          <button type="button" onClick={() => moveReviewerStep(idx, 1)} disabled={idx === reviewerSteps.length - 1} className="p-1.5 rounded-lg hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed" title="Move down">
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          </button>
+                          {reviewerSteps.length > 1 && (
+                            <button type="button" onClick={() => removeReviewerStep(idx)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive" title="Remove step">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
-                    {!users?.filter(u => (u.role === 'manager' || u.role === 'admin' || u.role === 'super_admin') && u.id !== parseInt(formData.employeeId)).length && (
-                      <p className="px-4 py-3 text-sm text-muted-foreground">No eligible reviewers found.</p>
-                    )}
                   </div>
-                  {needsReviewer && selectedReviewerIds.length === 0 && (
-                    <p className="text-xs text-amber-600 mt-1">Please select at least one reviewer.</p>
-                  )}
-                  {selectedReviewerIds.length > 0 && (
-                    <p className="text-xs text-muted-foreground mt-1">{selectedReviewerIds.length} reviewer{selectedReviewerIds.length > 1 ? 's' : ''} selected</p>
+                  <button
+                    type="button"
+                    onClick={addReviewerStep}
+                    className="mt-2 flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-medium px-2 py-1 rounded-lg hover:bg-primary/5 transition-colors"
+                  >
+                    <UserPlus className="w-4 h-4" /> Add another reviewer step
+                  </button>
+                  {needsReviewer && reviewerSteps.every(s => !s) && (
+                    <p className="text-xs text-amber-600 mt-1">Please assign at least one reviewer.</p>
                   )}
                 </div>
               )}
