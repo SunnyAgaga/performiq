@@ -4,19 +4,15 @@ An employee performance appraisal system with role-based access, appraisal cycle
 
 ## Project Structure
 
+This is a multi-project repository with **two fully independent applications**:
+
 ```
 performiq/
-├── frontend/          # React + Vite web application
-├── backend/           # Node.js + Express API server
-├── lib/               # Shared libraries
-│   ├── db/            # PostgreSQL schema + Drizzle ORM
-│   ├── api-spec/      # OpenAPI spec + code generation
-│   ├── api-client-react/  # Generated React Query hooks
-│   └── api-zod/       # Generated Zod validation schemas
-├── scripts/           # Utility scripts
-└── artifacts/         # Dev tooling
-    └── mockup-sandbox/
+├── backend/           # Node.js + Express API server (standalone)
+└── frontend/          # React + Vite web application (standalone)
 ```
+
+Each project manages its own dependencies, configuration, and deployment independently.
 
 ## Tech Stack
 
@@ -39,27 +35,66 @@ performiq/
 
 ## Demo Accounts
 
-| Email | Role | Password |
+All demo accounts are created with password: `password`
+
+| Email | Role | Department |
 |---|---|---|
-| admin@performiq.com | super_admin | password |
-| sarah@performiq.com | manager | password |
-| Johnme@performiq.com | manager | password |
-| alice@performiq.com | employee | password |
+| admin@performiq.com | super_admin | Management |
+| sarah@performiq.com | manager | Engineering |
+| james@performiq.com | manager | Product |
+| alice@performiq.com | employee | Engineering |
+| bob@performiq.com | employee | Engineering |
+| carol@performiq.com | employee | Product |
+| david@performiq.com | employee | Product |
 
 ## Getting Started
 
+### Backend Setup
+
 ```bash
+cd backend
+
 # Install dependencies
-pnpm install
+npm install
 
-# Start frontend (port 23605)
-pnpm --filter @workspace/performiq run dev
+# Setup environment
+cp .env.example .env
+# Edit .env with your database URL and other config
 
-# Start backend API (port 8080)
-pnpm --filter @workspace/api-server run dev
+# Run database migrations
+npx drizzle-kit push --config ./drizzle.config.ts
 
-# Push database schema
-cd lib/db && pnpm run push
+# Seed demo data (optional)
+npm run seed
+
+# Start development server (port 8080)
+npm run dev
+```
+
+### Frontend Setup
+
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start development server (port 5173)
+npm run dev
+```
+
+### Build for Production
+
+**Backend:**
+```bash
+cd backend
+npm run build
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm run build
 ```
 
 ## Features
@@ -72,3 +107,5 @@ cd lib/db && pnpm run push
 - Department management
 - Reports with PDF and Excel export
 - Department-level filtering on all reports
+
+### Disclaimer this is built entirely from replit.
