@@ -13,6 +13,8 @@ export const attendanceLogsTable = pgTable("attendance_logs", {
   clockInLng: decimal("clock_in_lng", { precision: 10, scale: 7 }),
   clockOutLat: decimal("clock_out_lat", { precision: 10, scale: 7 }),
   clockOutLng: decimal("clock_out_lng", { precision: 10, scale: 7 }),
+  faceImageIn: text("face_image_in"),
+  faceImageOut: text("face_image_out"),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

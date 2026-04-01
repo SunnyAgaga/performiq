@@ -5,38 +5,29 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Clock, LogIn, LogOut, CalendarDays, Users, Timer,
   MapPin, AlertCircle, Radio, ChevronDown, ChevronUp,
-  WifiOff, Wifi, CloudUpload,
+  WifiOff, Wifi, CloudUpload, Camera, RefreshCw, CheckCircle2, X, ZoomIn,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const PING_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+const PING_INTERVAL_MS = 30 * 60 * 1000;
 const QUEUE_KEY = "attendance_ping_queue";
+const CAPTURE_WIDTH = 320;
+const CAPTURE_HEIGHT = 240;
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type LatLng = { lat: number; lng: number } | null;
+// ─── Offline queue ────────────────────────────────────────────────────────────
 interface QueuedPing { lat: number; lng: number; recordedAt: string }
+type LatLng = { lat: number; lng: number } | null;
 
-// ─── Offline queue helpers (localStorage) ─────────────────────────────────────
-
-function readQueue(): QueuedPing[] {
-  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]"); } catch { return []; }
-}
-function writeQueue(q: QueuedPing[]) {
-  localStorage.setItem(QUEUE_KEY, JSON.stringify(q));
-}
-function enqueuePing(ping: QueuedPing) {
-  writeQueue([...readQueue(), ping]);
-}
-function clearQueue() {
-  localStorage.removeItem(QUEUE_KEY);
-}
+function readQueue(): QueuedPing[] { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]"); } catch { return []; } }
+function writeQueue(q: QueuedPing[]) { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); }
+function enqueuePing(ping: QueuedPing) { writeQueue([...readQueue(), ping]); }
+function clearQueue() { localStorage.removeItem(QUEUE_KEY); }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
-
 const authHeader = () => ({
   Authorization: `Bearer ${localStorage.getItem("token")}`,
   "Content-Type": "application/json",
@@ -44,15 +35,11 @@ const authHeader = () => ({
 
 async function apiFetch(url: string, opts: RequestInit = {}) {
   const r = await fetch(url, { ...opts, headers: { ...authHeader(), ...(opts.headers ?? {}) } });
-  if (!r.ok) {
-    const err = await r.json().catch(() => ({}));
-    throw new Error(err.error ?? "Request failed");
-  }
+  if (!r.ok) { const err = await r.json().catch(() => ({})); throw new Error(err.error ?? "Request failed"); }
   return r.json();
 }
 
-// ─── Geolocation ──────────────────────────────────────────────────────────────
-
+// ─── Geo ──────────────────────────────────────────────────────────────────────
 function getLocation(): Promise<LatLng> {
   return new Promise(resolve => {
     if (!navigator.geolocation) { resolve(null); return; }
@@ -65,33 +52,195 @@ function getLocation(): Promise<LatLng> {
 }
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
+function fmtTime(ts?: string | null) { if (!ts) return "—"; return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); }
+function fmtDuration(mins?: number | null) { if (!mins) return "—"; const h = Math.floor(mins / 60); const m = mins % 60; return h > 0 ? `${h}h ${m}m` : `${m}m`; }
+function fmtDate(d: string) { return new Date(d + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }); }
+function fmtCoords(lat?: string | null, lng?: string | null) { if (!lat || !lng) return null; return `${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`; }
+function mapsUrl(lat: string | number, lng: string | number) { return `https://www.google.com/maps?q=${lat},${lng}`; }
+function fmtCountdown(secs: number) { const m = Math.floor(secs / 60); const s = secs % 60; return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`; }
 
-function fmtTime(ts: string | null | undefined) {
-  if (!ts) return "—";
-  return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+// ─── Face Capture Modal ────────────────────────────────────────────────────────
+interface FaceCaptureProps {
+  open: boolean;
+  action: "clock-in" | "clock-out";
+  onConfirm: (faceImage: string | null) => void;
+  onCancel: () => void;
 }
-function fmtDuration(mins: number | null | undefined) {
-  if (!mins) return "—";
-  const h = Math.floor(mins / 60); const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+
+function FaceCaptureModal({ open, action, onConfirm, onCancel }: FaceCaptureProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [captured, setCaptured] = useState<string | null>(null);
+  const [camError, setCamError] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  const startCamera = useCallback(async () => {
+    setStarting(true);
+    setCamError(null);
+    setCaptured(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: CAPTURE_WIDTH }, height: { ideal: CAPTURE_HEIGHT } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch {
+      setCamError("Camera access denied. You can skip photo capture and continue.");
+    } finally {
+      setStarting(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) { startCamera(); }
+    return () => { stopCamera(); setCaptured(null); setCamError(null); };
+  }, [open, startCamera, stopCamera]);
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas) return;
+    canvas.width = CAPTURE_WIDTH;
+    canvas.height = CAPTURE_HEIGHT;
+    const ctx = canvas.getContext("2d")!;
+    // Mirror the image (selfie feel)
+    ctx.save();
+    ctx.translate(CAPTURE_WIDTH, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, CAPTURE_WIDTH, CAPTURE_HEIGHT);
+    ctx.restore();
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
+    setCaptured(dataUrl);
+    stopCamera();
+  };
+
+  const retake = () => {
+    setCaptured(null);
+    startCamera();
+  };
+
+  if (!open) return null;
+
+  const label = action === "clock-in" ? "Clock In" : "Clock Out";
+  const ringColor = action === "clock-in" ? "ring-green-400" : "ring-red-400";
+
+  return (
+    <Dialog open={open} onOpenChange={() => { stopCamera(); onCancel(); }}>
+      <DialogContent className="max-w-sm p-0 overflow-hidden">
+        <DialogHeader className="px-5 pt-5 pb-3">
+          <DialogTitle className="flex items-center gap-2">
+            <Camera className="w-4 h-4" /> Face Capture — {label}
+          </DialogTitle>
+          <p className="text-xs text-muted-foreground mt-0.5">Take a quick selfie to verify your identity</p>
+        </DialogHeader>
+
+        {/* Camera viewport */}
+        <div className="relative bg-black mx-5 rounded-xl overflow-hidden" style={{ aspectRatio: "4/3" }}>
+          {!captured ? (
+            <>
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover"
+                style={{ transform: "scaleX(-1)" }}
+                playsInline muted autoPlay
+              />
+              {starting && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                  <div className="w-8 h-8 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                </div>
+              )}
+              {camError && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 px-4 text-center">
+                  <AlertCircle className="w-8 h-8 text-yellow-400" />
+                  <p className="text-white text-sm">{camError}</p>
+                </div>
+              )}
+              {/* Face guide oval */}
+              {!starting && !camError && (
+                <div className={`absolute inset-0 flex items-center justify-center pointer-events-none`}>
+                  <div className={`w-36 h-44 rounded-full border-2 border-dashed ${ringColor} opacity-70`} />
+                </div>
+              )}
+            </>
+          ) : (
+            <img src={captured} alt="Captured face" className="w-full h-full object-cover" />
+          )}
+        </div>
+
+        <canvas ref={canvasRef} className="hidden" />
+
+        {/* Actions */}
+        <div className="px-5 pb-5 pt-4 flex flex-col gap-3">
+          {!captured ? (
+            <div className="flex gap-2">
+              {!camError ? (
+                <Button className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white" onClick={capturePhoto} disabled={starting}>
+                  <Camera className="w-4 h-4" /> Capture Photo
+                </Button>
+              ) : (
+                <Button variant="outline" className="flex-1 gap-2" onClick={startCamera}>
+                  <RefreshCw className="w-4 h-4" /> Retry Camera
+                </Button>
+              )}
+              <Button variant="ghost" className="gap-1 text-muted-foreground text-xs" onClick={() => onConfirm(null)}>
+                Skip
+              </Button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <Button className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white" onClick={() => onConfirm(captured)}>
+                <CheckCircle2 className="w-4 h-4" /> Looks Good — {label}
+              </Button>
+              <Button variant="outline" size="icon" onClick={retake} title="Retake">
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+          <button className="text-xs text-muted-foreground underline text-center" onClick={() => { stopCamera(); onCancel(); }}>
+            Cancel
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
-function fmtDate(d: string) {
-  return new Date(d + "T00:00:00").toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
-}
-function fmtCoords(lat?: string | null, lng?: string | null) {
-  if (!lat || !lng) return null;
-  return `${parseFloat(lat).toFixed(4)}, ${parseFloat(lng).toFixed(4)}`;
-}
-function mapsUrl(lat: string | number, lng: string | number) {
-  return `https://www.google.com/maps?q=${lat},${lng}`;
-}
-function fmtCountdown(secs: number) {
-  const m = Math.floor(secs / 60); const s = secs % 60;
-  return m > 0 ? `${m}m ${String(s).padStart(2, "0")}s` : `${s}s`;
+
+// ─── Face thumbnail ───────────────────────────────────────────────────────────
+function FaceThumb({ src, label }: { src: string; label: string }) {
+  const [zoom, setZoom] = useState(false);
+  return (
+    <>
+      <button
+        className="group relative w-9 h-9 rounded-full overflow-hidden border-2 border-border hover:border-primary transition-colors"
+        onClick={() => setZoom(true)}
+        title={`View ${label} photo`}
+      >
+        <img src={src} alt={label} className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <ZoomIn className="w-3 h-3 text-white" />
+        </div>
+      </button>
+      <Dialog open={zoom} onOpenChange={setZoom}>
+        <DialogContent className="max-w-xs p-4 text-center">
+          <DialogHeader><DialogTitle className="text-sm">{label}</DialogTitle></DialogHeader>
+          <img src={src} alt={label} className="w-full rounded-xl mt-2" />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
 function StatusBadge({ log }: { log: any }) {
   if (!log) return <Badge variant="outline">Not clocked in</Badge>;
   if (log.clockIn && !log.clockOut) return <Badge className="bg-green-500 text-white">Clocked In</Badge>;
@@ -118,17 +267,14 @@ function PingsCell({ logId }: { logId: number }) {
           {(pings as any[]).length === 0
             ? <p className="text-xs text-muted-foreground">No periodic pings recorded</p>
             : (pings as any[]).map((p: any, i: number) => {
-              const prev = i > 0 ? pings[i - 1] : null;
-              const gapMins = prev
-                ? Math.round((new Date(p.recordedAt).getTime() - new Date(prev.recordedAt).getTime()) / 60000)
-                : null;
+              const prev = i > 0 ? (pings as any[])[i - 1] : null;
+              const gapMins = prev ? Math.round((new Date(p.recordedAt).getTime() - new Date(prev.recordedAt).getTime()) / 60000) : null;
               const isLargeGap = gapMins !== null && gapMins > 60;
               return (
                 <div key={p.id}>
                   {isLargeGap && (
                     <div className="flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 py-0.5">
-                      <AlertCircle className="w-3 h-3" />
-                      {Math.round(gapMins / 60)}h gap — possible offline period
+                      <AlertCircle className="w-3 h-3" /> {Math.round(gapMins / 60)}h gap — possible offline period
                     </div>
                   )}
                   <a href={mapsUrl(p.lat, p.lng)} target="_blank" rel="noopener noreferrer"
@@ -170,8 +316,32 @@ function LocationCell({ log }: { log: any }) {
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+function FaceCell({ log }: { log: any }) {
+  return (
+    <div className="flex items-center gap-2">
+      {log.faceImageIn
+        ? <div className="flex flex-col items-center gap-0.5">
+            <FaceThumb src={log.faceImageIn} label="Clock-in photo" />
+            <span className="text-[10px] text-muted-foreground">In</span>
+          </div>
+        : <div className="w-9 h-9 rounded-full border-2 border-dashed border-border flex items-center justify-center">
+            <span className="text-[10px] text-muted-foreground">In</span>
+          </div>}
+      {log.faceImageOut
+        ? <div className="flex flex-col items-center gap-0.5">
+            <FaceThumb src={log.faceImageOut} label="Clock-out photo" />
+            <span className="text-[10px] text-muted-foreground">Out</span>
+          </div>
+        : log.clockOut
+          ? <div className="w-9 h-9 rounded-full border-2 border-dashed border-border flex items-center justify-center">
+              <span className="text-[10px] text-muted-foreground">Out</span>
+            </div>
+          : null}
+    </div>
+  );
+}
 
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Attendance() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -181,23 +351,22 @@ export default function Attendance() {
   const [filterDate, setFilterDate] = useState("");
   const [filterUserId, setFilterUserId] = useState("");
   const [elapsed, setElapsed] = useState("");
-  const [locStatus, setLocStatus] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
-  const locStatusRef = useRef(locStatus);
-  locStatusRef.current = locStatus;
 
-  // Ping state
+  // Camera capture state
+  const [captureOpen, setCaptureOpen] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"clock-in" | "clock-out" | null>(null);
+
+  // Ping / online state
   const [pingCount, setPingCount] = useState(0);
   const [nextPingIn, setNextPingIn] = useState<number | null>(null);
   const [queuedCount, setQueuedCount] = useState(() => readQueue().length);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pingCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastPingTimeRef = useRef<number | null>(null);
 
-  // ── Queries ────────────────────────────────────────────────────────────────
-
+  // ── Queries ──────────────────────────────────────────────────────────────────
   const { data: today, isLoading: todayLoading } = useQuery({
     queryKey: ["attendance-today"],
     queryFn: () => apiFetch("/api/attendance/today"),
@@ -222,82 +391,40 @@ export default function Attendance() {
 
   const isClockedIn = today?.clockIn && !today?.clockOut;
 
-  // ── Flush offline queue ────────────────────────────────────────────────────
-
+  // ── Flush offline queue ───────────────────────────────────────────────────────
   const flushQueue = useCallback(async () => {
     const queue = readQueue();
     if (queue.length === 0) return;
     setIsSyncing(true);
     try {
-      const result = await apiFetch("/api/attendance/location-ping/batch", {
-        method: "POST",
-        body: JSON.stringify({ pings: queue }),
-      });
-      clearQueue();
-      setQueuedCount(0);
-      setPingCount(c => c + (result.saved ?? 0));
+      const result = await apiFetch("/api/attendance/location-ping/batch", { method: "POST", body: JSON.stringify({ pings: queue }) });
+      clearQueue(); setQueuedCount(0); setPingCount(c => c + (result.saved ?? 0));
       qc.invalidateQueries({ queryKey: ["attendance"] });
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
-      if (result.saved > 0) {
-        toast({
-          title: "Location updates synced",
-          description: `${result.saved} queued ping${result.saved !== 1 ? "s" : ""} uploaded now that you're back online.`,
-        });
-      }
-    } catch {
-      // Still offline — leave the queue intact
-    } finally {
-      setIsSyncing(false);
-    }
+      if (result.saved > 0) toast({ title: "Location updates synced", description: `${result.saved} queued ping${result.saved !== 1 ? "s" : ""} uploaded.` });
+    } catch { /* Still offline */ } finally { setIsSyncing(false); }
   }, [qc, toast]);
 
-  // ── Online / offline detection ─────────────────────────────────────────────
-
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      flushQueue();
-    };
+    const handleOnline = () => { setIsOnline(true); flushQueue(); };
     const handleOffline = () => setIsOnline(false);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-    // If already online on mount and there's a stale queue, flush it
     if (navigator.onLine && readQueue().length > 0) flushQueue();
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
+    return () => { window.removeEventListener("online", handleOnline); window.removeEventListener("offline", handleOffline); };
   }, [flushQueue]);
 
-  // ── Send a location ping (online → server, offline → queue) ───────────────
-
+  // ── Ping interval ─────────────────────────────────────────────────────────────
   const sendPing = useCallback(async () => {
     const loc = await getLocation();
-    if (!loc) return; // No GPS — nothing to queue either
+    if (!loc) return;
     const recordedAt = new Date().toISOString();
-
-    if (!navigator.onLine) {
-      // Store locally for later
-      enqueuePing({ lat: loc.lat, lng: loc.lng, recordedAt });
-      setQueuedCount(c => c + 1);
-      return;
-    }
-
+    if (!navigator.onLine) { enqueuePing({ lat: loc.lat, lng: loc.lng, recordedAt }); setQueuedCount(c => c + 1); return; }
     try {
-      await apiFetch("/api/attendance/location-ping", {
-        method: "POST",
-        body: JSON.stringify({ lat: loc.lat, lng: loc.lng, recordedAt }),
-      });
-      setPingCount(c => c + 1);
-      qc.invalidateQueries({ queryKey: ["attendance"] });
-    } catch {
-      // Send failed — queue it
-      enqueuePing({ lat: loc.lat, lng: loc.lng, recordedAt });
-      setQueuedCount(c => c + 1);
-    }
+      await apiFetch("/api/attendance/location-ping", { method: "POST", body: JSON.stringify({ lat: loc.lat, lng: loc.lng, recordedAt }) });
+      setPingCount(c => c + 1); qc.invalidateQueries({ queryKey: ["attendance"] });
+    } catch { enqueuePing({ lat: loc.lat, lng: loc.lng, recordedAt }); setQueuedCount(c => c + 1); }
   }, [qc]);
-
-  // ── Ping schedule (30-min interval) ───────────────────────────────────────
 
   const startPingSchedule = useCallback(() => {
     if (pingIntervalRef.current) return;
@@ -317,69 +444,64 @@ export default function Attendance() {
   }, []);
 
   useEffect(() => {
-    if (isClockedIn) {
-      startPingSchedule();
-    } else {
-      stopPingSchedule();
-      setPingCount(0);
-    }
+    if (isClockedIn) { startPingSchedule(); } else { stopPingSchedule(); setPingCount(0); }
     return stopPingSchedule;
   }, [isClockedIn, startPingSchedule, stopPingSchedule]);
 
-  // ── Clock in / out mutations ───────────────────────────────────────────────
-
+  // ── Clock in / out after face capture confirmed ───────────────────────────────
   const clockIn = useMutation({
-    mutationFn: async () => {
-      setLocStatus("requesting");
+    mutationFn: async (faceImage: string | null) => {
       const loc = await getLocation();
-      setLocStatus(loc ? "granted" : "denied");
       return apiFetch("/api/attendance/clock-in", {
         method: "POST",
-        body: JSON.stringify(loc ? { lat: loc.lat, lng: loc.lng } : {}),
+        body: JSON.stringify({ ...(loc ? { lat: loc.lat, lng: loc.lng } : {}), ...(faceImage ? { faceImage } : {}) }),
       });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ queryKey: ["attendance"] });
-      const locMsg = locStatusRef.current === "granted"
-        ? " Location captured. Updates every 30 min."
-        : " Clocked in without location.";
-      toast({ title: "Clocked in", description: `Recorded at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}.${locMsg}` });
-      setLocStatus("idle");
+      toast({ title: "Clocked in", description: `Recorded at ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Location & photo saved.` });
     },
-    onError: (e: any) => { setLocStatus("idle"); toast({ title: "Error", description: e.message, variant: "destructive" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
   const clockOut = useMutation({
-    mutationFn: async () => {
-      setLocStatus("requesting");
+    mutationFn: async (faceImage: string | null) => {
       const loc = await getLocation();
-      setLocStatus(loc ? "granted" : "denied");
       return apiFetch("/api/attendance/clock-out", {
         method: "POST",
-        body: JSON.stringify(loc ? { lat: loc.lat, lng: loc.lng } : {}),
+        body: JSON.stringify({ ...(loc ? { lat: loc.lat, lng: loc.lng } : {}), ...(faceImage ? { faceImage } : {}) }),
       });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["attendance-today"] });
       qc.invalidateQueries({ queryKey: ["attendance"] });
       toast({ title: "Clocked out", description: "Have a great rest of your day!" });
-      setLocStatus("idle");
-      // Flush any remaining queued pings now that we're clocking out
       flushQueue();
     },
-    onError: (e: any) => { setLocStatus("idle"); toast({ title: "Error", description: e.message, variant: "destructive" }); },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
-  // ── Live elapsed timer ─────────────────────────────────────────────────────
+  // User clicks the main button → open camera
+  const handleClockAction = () => {
+    setPendingAction(isClockedIn ? "clock-out" : "clock-in");
+    setCaptureOpen(true);
+  };
 
+  // Camera confirmed (faceImage may be null if skipped)
+  const handleFaceConfirm = (faceImage: string | null) => {
+    setCaptureOpen(false);
+    if (pendingAction === "clock-in") clockIn.mutate(faceImage);
+    else if (pendingAction === "clock-out") clockOut.mutate(faceImage);
+    setPendingAction(null);
+  };
+
+  // ── Elapsed timer ─────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!today?.clockIn || today?.clockOut) { setElapsed(""); return; }
     const tick = () => {
       const diff = Math.floor((Date.now() - new Date(today.clockIn).getTime()) / 1000);
-      const h = Math.floor(diff / 3600);
-      const m = Math.floor((diff % 3600) / 60);
-      const s = diff % 60;
+      const h = Math.floor(diff / 3600); const m = Math.floor((diff % 3600) / 60); const s = diff % 60;
       setElapsed(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`);
     };
     tick();
@@ -389,8 +511,6 @@ export default function Attendance() {
 
   const isBusy = clockIn.isPending || clockOut.isPending;
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -398,7 +518,6 @@ export default function Attendance() {
           <h1 className="text-2xl font-bold tracking-tight">Attendance</h1>
           <p className="text-muted-foreground text-sm mt-1">Track your daily clock-in and clock-out</p>
         </div>
-        {/* Online/offline pill */}
         <div className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border ${
           isOnline
             ? "border-green-300 bg-green-50 text-green-700 dark:bg-green-900/20 dark:border-green-700 dark:text-green-300"
@@ -409,18 +528,16 @@ export default function Attendance() {
         </div>
       </div>
 
-      {/* Offline warning banner */}
       {!isOnline && isClockedIn && (
         <div className="flex items-start gap-3 rounded-lg border border-orange-300 bg-orange-50 dark:bg-orange-900/20 dark:border-orange-700 px-4 py-3 text-sm text-orange-800 dark:text-orange-200">
           <WifiOff className="w-4 h-4 mt-0.5 shrink-0" />
           <div>
             <p className="font-medium">You're offline</p>
-            <p className="mt-0.5 text-xs opacity-80">Location updates are being saved to your device and will upload automatically when you reconnect.</p>
+            <p className="mt-0.5 text-xs opacity-80">Location updates are queued locally and will sync automatically when you reconnect.</p>
           </div>
         </div>
       )}
 
-      {/* Syncing banner */}
       {isSyncing && (
         <div className="flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 px-4 py-3 text-sm text-blue-800 dark:text-blue-200">
           <CloudUpload className="w-4 h-4 animate-bounce" />
@@ -428,22 +545,34 @@ export default function Attendance() {
         </div>
       )}
 
-      {/* Location denied notice */}
-      {locStatus === "denied" && (
-        <div className="flex items-start gap-2 rounded-lg border border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-700 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          Location permission denied. Clock event recorded without coordinates. Enable location in browser settings to capture it next time.
-        </div>
-      )}
-
       {/* Clock In/Out Card */}
       <div className="rounded-2xl border border-border bg-card p-8 flex flex-col items-center gap-4 shadow-sm">
+        {/* Today's face captures */}
+        {(today?.faceImageIn || today?.faceImageOut) && (
+          <div className="flex items-center gap-4">
+            {today.faceImageIn && (
+              <div className="flex flex-col items-center gap-1">
+                <div className="w-16 h-16 rounded-full overflow-hidden ring-2 ring-green-400">
+                  <img src={today.faceImageIn} alt="Clock-in selfie" className="w-full h-full object-cover" />
+                </div>
+                <span className="text-xs text-muted-foreground">In</span>
+              </div>
+            )}
+            {today.faceImageOut && (
+              <div className="flex flex-col items-center gap-1">
+                <div className="w-16 h-16 rounded-full overflow-hidden ring-2 ring-red-400">
+                  <img src={today.faceImageOut} alt="Clock-out selfie" className="w-full h-full object-cover" />
+                </div>
+                <span className="text-xs text-muted-foreground">Out</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className={`w-20 h-20 rounded-full flex items-center justify-center shadow-inner ${isClockedIn ? "bg-green-100 dark:bg-green-900/40" : "bg-muted"}`}>
           <Clock className={`w-10 h-10 ${isClockedIn ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`} />
         </div>
-        {elapsed && (
-          <div className="text-4xl font-mono font-bold tracking-widest text-green-600 dark:text-green-400">{elapsed}</div>
-        )}
+        {elapsed && <div className="text-4xl font-mono font-bold tracking-widest text-green-600 dark:text-green-400">{elapsed}</div>}
 
         <div className="text-center">
           <p className="text-lg font-semibold">
@@ -452,9 +581,7 @@ export default function Attendance() {
               : today?.clockOut ? `Done for today — clocked out at ${fmtTime(today?.clockOut)}`
               : "Not clocked in today"}
           </p>
-          {today?.clockOut && (
-            <p className="text-sm text-muted-foreground mt-1">Duration: {fmtDuration(today?.durationMinutes)}</p>
-          )}
+          {today?.clockOut && <p className="text-sm text-muted-foreground mt-1">Duration: {fmtDuration(today?.durationMinutes)}</p>}
           {(today?.clockInLat || today?.clockOutLat) && (
             <div className="mt-2 flex flex-col items-center gap-1 text-xs">
               {today.clockInLat && (
@@ -473,7 +600,6 @@ export default function Attendance() {
           )}
         </div>
 
-        {/* Tracking / queue status */}
         {isClockedIn && (
           <div className="flex flex-wrap items-center gap-3 justify-center">
             <div className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
@@ -497,11 +623,11 @@ export default function Attendance() {
             <Button
               size="lg"
               className={`gap-2 px-8 ${isClockedIn ? "bg-red-500 hover:bg-red-600 text-white" : "bg-green-600 hover:bg-green-700 text-white"}`}
-              onClick={() => isClockedIn ? clockOut.mutate() : clockIn.mutate()}
+              onClick={handleClockAction}
               disabled={isBusy || todayLoading}
             >
-              {isBusy && locStatus === "requesting"
-                ? <><MapPin className="w-5 h-5 animate-pulse" /> Getting location…</>
+              {isBusy
+                ? <><Camera className="w-5 h-5 animate-pulse" /> Processing…</>
                 : isClockedIn
                 ? <><LogOut className="w-5 h-5" /> Clock Out</>
                 : <><LogIn className="w-5 h-5" /> Clock In</>}
@@ -509,12 +635,10 @@ export default function Attendance() {
           )}
           {!isBusy && !today?.clockOut && (
             <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <MapPin className="w-3 h-3" /> Location captured at clock-in/out and every 30 min
+              <Camera className="w-3 h-3" /> Photo + location captured at each clock event
             </p>
           )}
-          {today?.clockOut && (
-            <p className="text-sm text-muted-foreground italic">Day complete — see you tomorrow!</p>
-          )}
+          {today?.clockOut && <p className="text-sm text-muted-foreground italic">Day complete — see you tomorrow!</p>}
         </div>
       </div>
 
@@ -523,9 +647,7 @@ export default function Attendance() {
         <div className="flex items-center gap-2">
           <CalendarDays className="w-4 h-4 text-muted-foreground" />
           <Input type="date" className="w-40 h-9 text-sm" value={filterDate} onChange={e => setFilterDate(e.target.value)} />
-          {filterDate && (
-            <Button variant="ghost" size="sm" className="h-9 px-2 text-xs" onClick={() => setFilterDate("")}>Clear</Button>
-          )}
+          {filterDate && <Button variant="ghost" size="sm" className="h-9 px-2 text-xs" onClick={() => setFilterDate("")}>Clear</Button>}
         </div>
         {isManager && (
           <div className="flex items-center gap-2">
@@ -554,16 +676,17 @@ export default function Attendance() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Clock In</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Clock Out</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Duration</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Photos</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Location</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {logsLoading ? (
-                <tr><td colSpan={isManager ? 7 : 6} className="text-center py-10 text-muted-foreground">Loading…</td></tr>
+                <tr><td colSpan={isManager ? 8 : 7} className="text-center py-10 text-muted-foreground">Loading…</td></tr>
               ) : (logs as any[]).length === 0 ? (
                 <tr>
-                  <td colSpan={isManager ? 7 : 6} className="text-center py-10 text-muted-foreground">
+                  <td colSpan={isManager ? 8 : 7} className="text-center py-10 text-muted-foreground">
                     <Timer className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     No attendance records yet
                   </td>
@@ -575,6 +698,7 @@ export default function Attendance() {
                   <td className="px-4 py-3">{fmtTime(log.clockIn)}</td>
                   <td className="px-4 py-3">{fmtTime(log.clockOut)}</td>
                   <td className="px-4 py-3">{fmtDuration(log.durationMinutes)}</td>
+                  <td className="px-4 py-3"><FaceCell log={log} /></td>
                   <td className="px-4 py-3"><LocationCell log={log} /></td>
                   <td className="px-4 py-3"><StatusBadge log={log} /></td>
                 </tr>
@@ -583,6 +707,14 @@ export default function Attendance() {
           </table>
         </div>
       </div>
+
+      {/* Face Capture Modal */}
+      <FaceCaptureModal
+        open={captureOpen}
+        action={pendingAction ?? "clock-in"}
+        onConfirm={handleFaceConfirm}
+        onCancel={() => { setCaptureOpen(false); setPendingAction(null); }}
+      />
     </div>
   );
 }
