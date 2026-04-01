@@ -7,3 +7,4 @@ export * from "./departments";
 export * from "./sites";
 export * from "./leave";
 export * from "./attendance";
+export * from "./onboarding";

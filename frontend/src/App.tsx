@@ -22,6 +22,7 @@ import Sites from "@/pages/sites";
 import Leave from "@/pages/leave";
 import Attendance from "@/pages/attendance";
 import Timesheets from "@/pages/timesheets";
+import Onboarding from "@/pages/onboarding";
 import Profile from "@/pages/profile";
 
 const queryClient = new QueryClient();
@@ -90,6 +91,9 @@ function Router() {
       </Route>
       <Route path="/timesheets">
         <AppLayout><ProtectedRoute component={Timesheets} /></AppLayout>
+      </Route>
+      <Route path="/onboarding">
+        <AppLayout><ProtectedRoute component={Onboarding} /></AppLayout>
       </Route>
       <Route path="/profile">
         <AppLayout><ProtectedRoute component={Profile} /></AppLayout>
