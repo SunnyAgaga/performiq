@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, appraisalsTable, appraisalScoresTable, appraisalReviewersTable, usersTable, cyclesTable, criteriaTable, criteriaGroupItemsTable } from "../db/index.js";
+import { db, appraisalsTable, appraisalScoresTable, appraisalReviewersTable, appraisalReviewerScoresTable, usersTable, cyclesTable, criteriaTable, criteriaGroupItemsTable } from "../db/index.js";
 import { eq, and, inArray, or, asc } from "drizzle-orm";
 import { requireAuth, requireRole, AuthRequest } from "../middlewares/auth.js";
 
@@ -24,6 +24,37 @@ async function getReviewersForAppraisal(appraisalId: number) {
     managerComment: row.managerComment,
     reviewedAt: row.reviewedAt,
   }));
+}
+
+async function getReviewerScoresForAppraisal(appraisalId: number) {
+  const reviewerScoreRows = await db.select().from(appraisalReviewerScoresTable)
+    .where(eq(appraisalReviewerScoresTable.appraisalId, appraisalId));
+  const reviewerIds = [...new Set(reviewerScoreRows.map(r => r.reviewerId))];
+  const reviewerUsers = reviewerIds.length > 0
+    ? await db.select().from(usersTable).where(inArray(usersTable.id, reviewerIds))
+    : [];
+  const reviewerUserMap = Object.fromEntries(reviewerUsers.map(u => [u.id, u]));
+
+  const junctionRows = await db.select().from(appraisalReviewersTable)
+    .where(eq(appraisalReviewersTable.appraisalId, appraisalId))
+    .orderBy(asc(appraisalReviewersTable.orderIndex));
+
+  return reviewerIds.map(rid => {
+    const user = reviewerUserMap[rid];
+    const junction = junctionRows.find(r => r.reviewerId === rid);
+    return {
+      reviewerId: rid,
+      reviewerName: user?.name ?? `Reviewer ${rid}`,
+      reviewerRole: user?.role,
+      comment: junction?.managerComment ?? null,
+      reviewedAt: junction?.reviewedAt ?? null,
+      stepStatus: junction?.status ?? null,
+      orderIndex: junction?.orderIndex ?? 0,
+      scores: reviewerScoreRows
+        .filter(r => r.reviewerId === rid)
+        .map(r => ({ criterionId: r.criterionId, score: r.score, note: r.note, actualValue: r.actualValue })),
+    };
+  }).sort((a, b) => a.orderIndex - b.orderIndex);
 }
 
 async function enrichAppraisal(appraisal: typeof appraisalsTable.$inferSelect) {
@@ -168,8 +199,11 @@ router.get("/appraisals/:id", requireAuth, async (req: AuthRequest, res) => {
       return { ...s, criterion };
     }));
 
-    const enriched = await enrichAppraisal(appraisal);
-    res.json({ ...enriched, scores: enrichedScores });
+    const [enriched, reviewerScores] = await Promise.all([
+      enrichAppraisal(appraisal),
+      getReviewerScoresForAppraisal(appraisal.id),
+    ]);
+    res.json({ ...enriched, scores: enrichedScores, reviewerScores });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
@@ -222,6 +256,14 @@ router.put("/appraisals/:id", requireAuth, async (req: AuthRequest, res) => {
       updates.managerComment = managerComment;
     }
 
+    // Find current in-progress reviewer (if this is a manager/reviewer action)
+    const [inProgressReviewerRow] = current.status === "manager_review"
+      ? await db.select().from(appraisalReviewersTable)
+          .where(and(eq(appraisalReviewersTable.appraisalId, appraisalId), eq(appraisalReviewersTable.status, 'in_progress')))
+          .limit(1)
+      : [undefined];
+    const currentReviewerId = inProgressReviewerRow?.reviewerId ?? req.user!.id;
+
     if (scores && Array.isArray(scores)) {
       for (const score of scores) {
         const existing = await db.select().from(appraisalScoresTable)
@@ -237,6 +279,30 @@ router.put("/appraisals/:id", requireAuth, async (req: AuthRequest, res) => {
               actualValue: score.actualValue ?? existing[0].actualValue,
             })
             .where(eq(appraisalScoresTable.id, existing[0].id));
+        }
+
+        // Save per-reviewer scores when in manager_review
+        if (current.status === "manager_review" && score.managerScore != null) {
+          const existingRevScore = await db.select().from(appraisalReviewerScoresTable)
+            .where(and(
+              eq(appraisalReviewerScoresTable.appraisalId, appraisalId),
+              eq(appraisalReviewerScoresTable.reviewerId, currentReviewerId),
+              eq(appraisalReviewerScoresTable.criterionId, score.criterionId),
+            )).limit(1);
+          if (existingRevScore.length > 0) {
+            await db.update(appraisalReviewerScoresTable)
+              .set({ score: score.managerScore, note: score.managerNote, actualValue: score.actualValue ?? null })
+              .where(eq(appraisalReviewerScoresTable.id, existingRevScore[0].id));
+          } else {
+            await db.insert(appraisalReviewerScoresTable).values({
+              appraisalId: appraisalId,
+              reviewerId: currentReviewerId,
+              criterionId: score.criterionId,
+              score: score.managerScore,
+              note: score.managerNote,
+              actualValue: score.actualValue ?? null,
+            });
+          }
         }
       }
       const targetStatus = updates.status ?? current.status;
@@ -271,8 +337,11 @@ router.put("/appraisals/:id", requireAuth, async (req: AuthRequest, res) => {
       return { ...s, criterion };
     }));
 
-    const enriched = await enrichAppraisal(updated);
-    res.json({ ...enriched, scores: enrichedScores });
+    const [enriched, reviewerScores] = await Promise.all([
+      enrichAppraisal(updated),
+      getReviewerScoresForAppraisal(updated.id),
+    ]);
+    res.json({ ...enriched, scores: enrichedScores, reviewerScores });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });

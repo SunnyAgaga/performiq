@@ -4,7 +4,8 @@ import { useGetAppraisal, useUpdateAppraisal } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Label } from "@/components/shared";
 import { useAuth } from "@/hooks/use-auth";
-import { CheckCircle2, User, Star, FileText, ShieldCheck, ThumbsUp, ArrowRight, Users } from "lucide-react";
+import { CheckCircle2, User, Star, FileText, ShieldCheck, ThumbsUp, ArrowRight, Users, MessageSquare } from "lucide-react";
+import { format } from "date-fns";
 
 const WORKFLOW_ROUTES: Record<string, { label: string; steps: string[] }> = {
   self_only:       { label: "Self Only",              steps: ["Self Review", "Completed"] },
@@ -353,6 +354,102 @@ export default function AppraisalDetail() {
           );
         })}
       </div>
+
+      {/* Reviewer Evaluations — shown when there are per-reviewer scores */}
+      {(() => {
+        const reviewerScores: any[] = (appraisal as any).reviewerScores ?? [];
+        if (reviewerScores.length === 0) return null;
+
+        // Build a map: criterionId → criterion info
+        const critMap: Record<number, any> = {};
+        appraisal.scores.forEach((s: any) => { if (s.criterion) critMap[s.criterionId] = s.criterion; });
+
+        return (
+          <div className="space-y-4 mb-8">
+            <h3 className="text-xl font-bold border-b border-border pb-2 flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" /> Reviewer Evaluations
+              <span className="text-sm font-normal text-muted-foreground ml-1">({reviewerScores.length} reviewer{reviewerScores.length > 1 ? "s" : ""})</span>
+            </h3>
+            {reviewerScores.map((rev: any, idx: number) => (
+              <Card key={rev.reviewerId} className="overflow-hidden">
+                {/* Reviewer header */}
+                <div className="flex items-center justify-between px-5 py-4 bg-muted/20 border-b border-border">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
+                      {rev.reviewerName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="font-semibold">{rev.reviewerName}</p>
+                      <p className="text-xs text-muted-foreground capitalize">{rev.reviewerRole} · Step {idx + 1}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {rev.stepStatus === 'completed' && <span className="text-xs font-semibold text-green-700 bg-green-100 px-2.5 py-1 rounded-full">Completed</span>}
+                    {rev.stepStatus === 'in_progress' && <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2.5 py-1 rounded-full">In Progress</span>}
+                    {rev.stepStatus === 'pending' && <span className="text-xs font-semibold text-muted-foreground bg-muted px-2.5 py-1 rounded-full">Pending</span>}
+                    {rev.reviewedAt && (
+                      <span className="text-xs text-muted-foreground ml-1">{format(new Date(rev.reviewedAt), 'MMM d, yyyy')}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Per-criterion scores */}
+                {rev.scores.length > 0 ? (
+                  <div className="p-5">
+                    <div className="space-y-2">
+                      {rev.scores.map((s: any) => {
+                        const crit = critMap[s.criterionId];
+                        return (
+                          <div key={s.criterionId} className="flex items-center gap-4 p-3 bg-muted/30 rounded-xl">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{crit?.name ?? `Criterion #${s.criterionId}`}</p>
+                              {s.note && <p className="text-xs text-muted-foreground mt-0.5 italic truncate">{s.note}</p>}
+                            </div>
+                            {s.actualValue != null && crit?.targetValue && (
+                              <span className="text-xs text-muted-foreground shrink-0">
+                                {Number(s.actualValue).toLocaleString()} / {Number(crit.targetValue).toLocaleString()}{crit.unit ? ` ${crit.unit}` : ""}
+                              </span>
+                            )}
+                            <div className="shrink-0 text-right">
+                              <span className="text-base font-bold text-primary">{Number(s.score).toFixed(1)}</span>
+                              <span className="text-xs text-muted-foreground">/5</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Average score */}
+                    {rev.scores.length > 1 && (() => {
+                      const avg = rev.scores.reduce((sum: number, s: any) => sum + Number(s.score), 0) / rev.scores.length;
+                      return (
+                        <div className="flex items-center justify-end pt-3 mt-3 border-t border-border gap-2">
+                          <span className="text-sm text-muted-foreground">Average score:</span>
+                          <span className="text-xl font-bold text-primary">{avg.toFixed(2)}</span>
+                          <span className="text-sm text-muted-foreground">/5</span>
+                        </div>
+                      );
+                    })()}
+                    {/* Reviewer overall comment */}
+                    {rev.comment && (
+                      <div className="mt-4 flex items-start gap-2 p-3 bg-blue-50/60 border border-blue-200 rounded-xl">
+                        <MessageSquare className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="text-xs font-semibold text-blue-700 mb-1">Overall Comment</p>
+                          <p className="text-sm">{rev.comment}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-5 text-sm text-muted-foreground italic">
+                    {rev.stepStatus === 'pending' ? 'Not yet started.' : rev.stepStatus === 'in_progress' ? 'Review in progress — scores not yet submitted.' : 'No scores recorded.'}
+                  </div>
+                )}
+              </Card>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* General Comments Section */}
       <Card className="p-6 mb-8">
