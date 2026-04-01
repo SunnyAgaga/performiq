@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, date, timestamp, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, date, timestamp, pgEnum, decimal } from "drizzle-orm/pg-core";
 
 export const timesheetStatusEnum = pgEnum("timesheet_status", ["draft", "submitted", "approved", "rejected"]);
 
@@ -9,6 +9,10 @@ export const attendanceLogsTable = pgTable("attendance_logs", {
   clockIn: timestamp("clock_in"),
   clockOut: timestamp("clock_out"),
   durationMinutes: integer("duration_minutes"),
+  clockInLat: decimal("clock_in_lat", { precision: 10, scale: 7 }),
+  clockInLng: decimal("clock_in_lng", { precision: 10, scale: 7 }),
+  clockOutLat: decimal("clock_out_lat", { precision: 10, scale: 7 }),
+  clockOutLng: decimal("clock_out_lng", { precision: 10, scale: 7 }),
   notes: text("notes"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

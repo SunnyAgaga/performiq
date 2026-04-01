@@ -24,6 +24,7 @@ router.get("/attendance/today", requireAuth, async (req: AuthRequest, res) => {
 router.post("/attendance/clock-in", requireAuth, async (req: AuthRequest, res) => {
   try {
     const userId = req.user!.id;
+    const { lat, lng } = req.body;
     const today = new Date().toISOString().split("T")[0];
     // Check not already clocked in
     const [existing] = await db.select().from(attendanceLogsTable)
@@ -36,6 +37,8 @@ router.post("/attendance/clock-in", requireAuth, async (req: AuthRequest, res) =
       userId,
       date: today,
       clockIn: new Date(),
+      clockInLat: lat != null ? String(lat) : null,
+      clockInLng: lng != null ? String(lng) : null,
     }).returning();
     res.json(log);
   } catch (err) {
@@ -47,7 +50,7 @@ router.post("/attendance/clock-in", requireAuth, async (req: AuthRequest, res) =
 router.post("/attendance/clock-out", requireAuth, async (req: AuthRequest, res) => {
   try {
     const userId = req.user!.id;
-    const { notes } = req.body;
+    const { notes, lat, lng } = req.body;
     const today = new Date().toISOString().split("T")[0];
     const [existing] = await db.select().from(attendanceLogsTable)
       .where(and(eq(attendanceLogsTable.userId, userId), eq(attendanceLogsTable.date, today)))
@@ -58,7 +61,13 @@ router.post("/attendance/clock-out", requireAuth, async (req: AuthRequest, res) 
     const clockOut = new Date();
     const durationMinutes = Math.round((clockOut.getTime() - new Date(existing.clockIn).getTime()) / 60000);
     const [updated] = await db.update(attendanceLogsTable)
-      .set({ clockOut, durationMinutes, notes: notes ?? existing.notes })
+      .set({
+        clockOut,
+        durationMinutes,
+        notes: notes ?? existing.notes,
+        clockOutLat: lat != null ? String(lat) : null,
+        clockOutLng: lng != null ? String(lng) : null,
+      })
       .where(eq(attendanceLogsTable.id, existing.id))
       .returning();
     res.json(updated);
