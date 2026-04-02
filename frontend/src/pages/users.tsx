@@ -195,22 +195,26 @@ export default function Users() {
                 </td>
                 <td className="p-4 text-right">
                   <div className="flex justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => { setMutationError(null); setFormData({ name: u.name, email: u.email, password: "", role: u.role, customRoleId: u.customRole?.id?.toString() || "", siteId: (u as any).siteId?.toString() || "", department: u.department||"", jobTitle: u.jobTitle||"", phone: u.phone||"", staffId: u.staffId||"" }); setEditingId(u.id); setIsNewDept(false); setIsDialogOpen(true); }}
-                    >
-                      <Edit className="w-3.5 h-3.5" /> Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => handleDelete(u.id)}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" /> Delete
-                    </Button>
+                    {(user?.role === 'super_admin' || !['admin','super_admin'].includes(u.role)) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => { setMutationError(null); setFormData({ name: u.name, email: u.email, password: "", role: u.role, customRoleId: u.customRole?.id?.toString() || "", siteId: (u as any).siteId?.toString() || "", department: u.department||"", jobTitle: u.jobTitle||"", phone: u.phone||"", staffId: u.staffId||"" }); setEditingId(u.id); setIsNewDept(false); setIsDialogOpen(true); }}
+                      >
+                        <Edit className="w-3.5 h-3.5" /> Edit
+                      </Button>
+                    )}
+                    {(user?.role === 'super_admin' || !['admin','super_admin'].includes(u.role)) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => handleDelete(u.id)}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" /> Delete
+                      </Button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -274,12 +278,9 @@ export default function Users() {
                 <select className="w-full px-4 py-2 border rounded-xl bg-background" value={formData.role} onChange={e=>setFormData({...formData, role: e.target.value as any, customRoleId: ""})}>
                   <option value="employee">Employee</option>
                   <option value="manager">Manager</option>
-                  {(user?.role === "admin" || user?.role === "super_admin") && <option value="admin">Admin</option>}
+                  {user?.role === "super_admin" && <option value="admin">Admin</option>}
                   {user?.role === "super_admin" && <option value="super_admin">Super Admin</option>}
                 </select>
-                {(formData.role === "admin" || formData.role === "super_admin") && user?.role !== "super_admin" && (
-                  <p className="text-xs text-amber-600 mt-1">Only a Super Admin can assign admin-level roles.</p>
-                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

@@ -40,12 +40,16 @@ async function getUserWithRole(userId: number) {
 }
 
 
-router.get("/users", requireAuth, requireRole("admin", "manager"), async (_req, res) => {
+router.get("/users", requireAuth, requireRole("admin", "manager"), async (req: AuthRequest, res) => {
   try {
-    const users = await db.select().from(usersTable).orderBy(usersTable.name);
+    const allUsers = await db.select().from(usersTable).orderBy(usersTable.name);
     const customRoles = await db.select().from(customRolesTable);
     const roleMap = new Map(customRoles.map(r => [r.id, r]));
-    res.json(users.map(u => formatUser(u, u.customRoleId ? roleMap.get(u.customRoleId) ?? null : null)));
+    // Non-super_admins cannot see admin or super_admin accounts
+    const visible = req.user!.role === "super_admin"
+      ? allUsers
+      : allUsers.filter(u => !ELEVATED_ROLES.includes(u.role));
+    res.json(visible.map(u => formatUser(u, u.customRoleId ? roleMap.get(u.customRoleId) ?? null : null)));
   } catch {
     res.status(500).json({ error: "Server error" });
   }
@@ -91,6 +95,13 @@ router.get("/users/:id", requireAuth, async (req, res) => {
 
 router.put("/users/:id", requireAuth, requireRole("admin"), async (req: AuthRequest, res) => {
   try {
+    // Only super_admin can edit admin or super_admin accounts
+    const [targetUser] = await db.select().from(usersTable).where(eq(usersTable.id, Number(req.params.id))).limit(1);
+    if (targetUser && ELEVATED_ROLES.includes(targetUser.role) && req.user!.role !== "super_admin") {
+      res.status(403).json({ error: "Only a Super Admin can edit admin or super_admin accounts" });
+      return;
+    }
+
     const { name, email, password, role, customRoleId, managerId, siteId, department, jobTitle, phone, staffId } = req.body;
     const updates: Record<string, any> = { name, email, managerId, siteId: siteId ? Number(siteId) : null, department, jobTitle, phone: phone || null, staffId: staffId || null };
     updates.customRoleId = customRoleId ? Number(customRoleId) : null;
@@ -128,6 +139,12 @@ router.delete("/users/:id", requireAuth, requireRole("admin"), async (req: AuthR
   try {
     if (Number(req.params.id) === req.user!.id) {
       res.status(400).json({ error: "Cannot delete yourself" });
+      return;
+    }
+    // Only super_admin can delete admin or super_admin accounts
+    const [targetUser] = await db.select().from(usersTable).where(eq(usersTable.id, Number(req.params.id))).limit(1);
+    if (targetUser && ELEVATED_ROLES.includes(targetUser.role) && req.user!.role !== "super_admin") {
+      res.status(403).json({ error: "Only a Super Admin can delete admin or super_admin accounts" });
       return;
     }
     await db.delete(usersTable).where(eq(usersTable.id, Number(req.params.id)));
