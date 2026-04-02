@@ -23,6 +23,7 @@ import Leave from "@/pages/leave";
 import Attendance from "@/pages/attendance";
 import Timesheets from "@/pages/timesheets";
 import Onboarding from "@/pages/onboarding";
+import HrQueries from "@/pages/hr-queries";
 import Profile from "@/pages/profile";
 
 const queryClient = new QueryClient();
@@ -94,6 +95,9 @@ function Router() {
       </Route>
       <Route path="/onboarding">
         <AppLayout><ProtectedRoute component={Onboarding} /></AppLayout>
+      </Route>
+      <Route path="/hr-queries">
+        <AppLayout><ProtectedRoute component={HrQueries} /></AppLayout>
       </Route>
       <Route path="/profile">
         <AppLayout><ProtectedRoute component={Profile} /></AppLayout>

@@ -8,3 +8,4 @@ export * from "./sites";
 export * from "./leave";
 export * from "./attendance";
 export * from "./onboarding";
+export * from "./hr-queries";

@@ -21,6 +21,7 @@ import {
   Clock,
   ClipboardCheck,
   UserPlus,
+  MessageSquareWarning,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User } from "@/lib";
@@ -33,6 +34,7 @@ const NAV_ITEMS: { name: string; path: string; icon: any; roles: string[]; custo
   { name: "Attendance",  path: "/attendance",   icon: Clock,           roles: ["super_admin", "admin", "manager", "employee"] },
   { name: "Timesheets",  path: "/timesheets",   icon: ClipboardCheck,  roles: ["super_admin", "admin", "manager", "employee"] },
   { name: "Onboarding",  path: "/onboarding",   icon: UserPlus,        roles: ["super_admin", "admin"], customRoles: ["hr manager"] },
+  { name: "HR Queries",  path: "/hr-queries",   icon: MessageSquareWarning, roles: ["super_admin", "admin", "manager", "employee"], customRoles: ["hr manager"] },
   { name: "Cycles",      path: "/cycles",       icon: RefreshCcw,      roles: ["super_admin", "admin", "manager"] },
   { name: "Criteria",    path: "/criteria",     icon: ListChecks,      roles: ["super_admin", "admin"] },
   { name: "Reports",     path: "/reports",      icon: BarChart3,       roles: ["super_admin", "admin"] },

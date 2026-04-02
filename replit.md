@@ -73,7 +73,7 @@ Express 5 API server. Fully self-contained — the DB layer lives at `backend/sr
 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — CORS, JSON parsing, routes mounted at `/api`
-- Routes: `src/routes/` — auth, users, appraisals, cycles, criteria, goals, departments, reports, dashboard
+- Routes: `src/routes/` — auth, users, appraisals, cycles, criteria, goals, departments, reports, dashboard, hr-queries
 - DB layer: `src/db/` — Drizzle ORM connection + all schema table definitions
 - `pnpm --filter @workspace/api-server run dev` — build + start (port 8080)
 - `pnpm --filter @workspace/api-server run build` — esbuild bundle to `dist/index.mjs`
