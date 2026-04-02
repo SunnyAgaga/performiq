@@ -49,8 +49,19 @@ interface NavLinksProps {
 
 function NavLinks({ user, onNavigate }: NavLinksProps) {
   const [location] = useLocation();
-  const userCustomRoleName = (user as any).customRole?.name?.toLowerCase() ?? null;
+  const userCustomRole = (user as any).customRole ?? null;
+  const userCustomRoleName = userCustomRole?.name?.toLowerCase() ?? null;
+  const customMenuPerms: string[] = Array.isArray(userCustomRole?.menuPermissions) && userCustomRole.menuPermissions.length > 0
+    ? userCustomRole.menuPermissions
+    : [];
+
   const visibleItems = NAV_ITEMS.filter(item => {
+    // If the user has a custom role with specific menu permissions, respect that list
+    if (customMenuPerms.length > 0) {
+      const menuKey = item.path.replace("/", "");
+      return customMenuPerms.includes(menuKey);
+    }
+    // Otherwise fall back to role-based access
     if (item.roles.includes(user.role)) return true;
     if (item.customRoles && userCustomRoleName)
       return item.customRoles.some(cr => cr.toLowerCase() === userCustomRoleName);

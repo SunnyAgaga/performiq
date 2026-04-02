@@ -15,7 +15,12 @@ const formatAuthUser = (user: typeof usersTable.$inferSelect, customRole?: typeo
   managerId: user.managerId, siteId: user.siteId, department: user.department,
   jobTitle: user.jobTitle, phone: user.phone, staffId: user.staffId, createdAt: user.createdAt,
   customRoleId: user.customRoleId ?? null,
-  customRole: customRole ? { id: customRole.id, name: customRole.name, permissionLevel: customRole.permissionLevel } : null,
+  customRole: customRole ? {
+    id: customRole.id,
+    name: customRole.name,
+    permissionLevel: customRole.permissionLevel,
+    menuPermissions: (() => { try { return JSON.parse(customRole.menuPermissions ?? "[]"); } catch { return []; } })(),
+  } : null,
 });
 
 async function getCustomRole(user: typeof usersTable.$inferSelect) {

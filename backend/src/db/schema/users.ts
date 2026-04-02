@@ -7,6 +7,7 @@ export const customRolesTable = pgTable("custom_roles", {
   name: text("name").notNull().unique(),
   permissionLevel: roleEnum("permission_level").notNull().default("employee"),
   description: text("description"),
+  menuPermissions: text("menu_permissions").notNull().default("[]"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
