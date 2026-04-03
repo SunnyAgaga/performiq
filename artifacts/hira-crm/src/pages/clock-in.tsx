@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { apiFetch, apiGet, apiPost, apiPut, apiDelete } from "@/lib/api";
 
 const PING_INTERVAL_MS = 30 * 60 * 1000;
@@ -635,6 +637,104 @@ function AgentStatusCard({ agent }: { agent: any }) {
   );
 }
 
+// ── TimePicker ─────────────────────────────────────────────────────────────────
+const HOURS   = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+
+function TimePicker({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const [hh, mm] = value.split(":") as [string, string];
+
+  const setHour   = (h: string) => { onChange(`${h}:${mm ?? "00"}`); };
+  const setMinute = (m: string) => { onChange(`${hh ?? "09"}:${m}`); };
+
+  const hourRef   = useRef<HTMLDivElement>(null);
+  const minuteRef = useRef<HTMLDivElement>(null);
+
+  // Scroll selected item into view when popover opens
+  useEffect(() => {
+    if (!open) return;
+    const scrollToSelected = (ref: React.RefObject<HTMLDivElement | null>, items: string[], sel: string) => {
+      const idx = items.indexOf(sel);
+      if (idx < 0 || !ref.current) return;
+      const child = ref.current.querySelectorAll("button")[idx] as HTMLButtonElement | null;
+      child?.scrollIntoView({ block: "center" });
+    };
+    setTimeout(() => {
+      scrollToSelected(hourRef, HOURS, hh ?? "09");
+      scrollToSelected(minuteRef, MINUTES, mm ?? "00");
+    }, 50);
+  }, [open, hh, mm]);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-2 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-left shadow-sm hover:bg-accent/40 transition-colors focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <span className="font-mono font-medium">{value || "—"}</span>
+          {label && <span className="ml-auto text-[11px] text-muted-foreground">{label}</span>}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-52" align="start" sideOffset={6}>
+        <div className="flex">
+          {/* Hours */}
+          <div className="flex-1 border-r border-border">
+            <p className="text-[10px] font-semibold text-muted-foreground text-center py-1.5 border-b border-border uppercase tracking-wide">Hr</p>
+            <ScrollArea className="h-52">
+              <div ref={hourRef} className="py-1">
+                {HOURS.map(h => (
+                  <button
+                    key={h} type="button"
+                    onClick={() => { setHour(h); }}
+                    className={`w-full text-center py-1.5 text-sm font-mono transition-colors rounded-sm mx-auto block
+                      ${hh === h
+                        ? "bg-primary text-primary-foreground font-semibold"
+                        : "hover:bg-accent text-foreground"
+                      }`}
+                  >
+                    {h}
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* Minutes */}
+          <div className="flex-1">
+            <p className="text-[10px] font-semibold text-muted-foreground text-center py-1.5 border-b border-border uppercase tracking-wide">Min</p>
+            <ScrollArea className="h-52">
+              <div ref={minuteRef} className="py-1">
+                {MINUTES.map(m => (
+                  <button
+                    key={m} type="button"
+                    onClick={() => { setMinute(m); setOpen(false); }}
+                    className={`w-full text-center py-1.5 text-sm font-mono transition-colors rounded-sm block
+                      ${mm === m
+                        ? "bg-primary text-primary-foreground font-semibold"
+                        : "hover:bg-accent text-foreground"
+                      }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        </div>
+
+        {/* Footer confirm */}
+        <div className="border-t border-border px-3 py-2 flex items-center justify-between">
+          <span className="text-sm font-mono font-semibold text-primary">{value}</span>
+          <Button size="sm" className="h-7 text-xs px-3" onClick={() => setOpen(false)}>Done</Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // ── Shift Schedules (admin/supervisor only) ────────────────────────────────────
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -815,11 +915,11 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm mb-1.5 block">Start Time</Label>
-                <Input type="time" value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} />
+                <TimePicker value={form.startTime} onChange={v => setForm(f => ({ ...f, startTime: v }))} label="start" />
               </div>
               <div>
                 <Label className="text-sm mb-1.5 block">End Time</Label>
-                <Input type="time" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} />
+                <TimePicker value={form.endTime} onChange={v => setForm(f => ({ ...f, endTime: v }))} label="end" />
               </div>
             </div>
             <div>
