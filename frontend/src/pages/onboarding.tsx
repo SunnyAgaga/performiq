@@ -6,7 +6,7 @@ import {
   UserPlus, UserMinus, CheckCircle2, Clock, AlertCircle, Plus, X,
   ChevronDown, ChevronRight, Edit2, Trash2, FileText, Users, Settings,
   RefreshCw, Search, Filter, Check, SkipForward, CircleDot,
-  Upload, Download, File, ListTodo,
+  Upload, Download, File, ListTodo, Eye,
 } from "lucide-react";
 import { format } from "date-fns";
 import { apiFetch } from "@/lib/utils";
@@ -258,6 +258,7 @@ function WorkflowDetail({
   const [docsLoading, setDocsLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [docNotes, setDocNotes] = useState("");
+  const [viewingDoc, setViewingDoc] = useState<{ name: string; fileData: string; fileType: string } | null>(null);
 
   // Fetch fresh workflow data from server
   const refresh = useCallback(async (id: number) => {
@@ -348,6 +349,18 @@ function WorkflowDetail({
       toast({ title: "Document deleted" });
     } catch {
       toast({ title: "Failed to delete", variant: "destructive" });
+    }
+  };
+
+  const viewDoc = async (doc: any) => {
+    try {
+      const res = await apiFetch(`/api/onboarding/documents/${doc.id}/download`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (!data.fileData) { toast({ title: "No file data available", variant: "destructive" }); return; }
+      setViewingDoc({ name: data.name, fileData: data.fileData, fileType: data.fileType || "" });
+    } catch {
+      toast({ title: "Failed to load document", variant: "destructive" });
     }
   };
 
@@ -818,6 +831,10 @@ function WorkflowDetail({
                       {doc.notes && <p className="text-xs italic text-muted-foreground mt-0.5">{doc.notes}</p>}
                     </div>
                     <div className="flex gap-1 shrink-0">
+                      <button onClick={() => viewDoc(doc)}
+                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" title="View">
+                        <Eye className="w-4 h-4" />
+                      </button>
                       <button onClick={() => downloadDoc(doc)}
                         className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" title="Download">
                         <Download className="w-4 h-4" />
@@ -850,6 +867,73 @@ function WorkflowDetail({
           </div>
         )}
       </div>
+
+      {/* Document Viewer Modal */}
+      {viewingDoc && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          onClick={() => setViewingDoc(null)}>
+          <div className="bg-background rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden"
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <FileText className="w-4 h-4 text-primary shrink-0" />
+                <span className="font-semibold text-sm truncate">{viewingDoc.name}</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  onClick={() => {
+                    const blob = new Blob([Uint8Array.from(atob(viewingDoc.fileData), c => c.charCodeAt(0))], { type: viewingDoc.fileType || "application/octet-stream" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a"); a.href = url; a.download = viewingDoc.name; a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted hover:bg-muted/80 text-sm font-medium">
+                  <Download className="w-3.5 h-3.5" /> Download
+                </button>
+                <button onClick={() => setViewingDoc(null)} className="p-1.5 rounded-lg hover:bg-muted">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            {/* Content */}
+            <div className="flex-1 overflow-auto bg-muted/20">
+              {viewingDoc.fileType.startsWith("image/") ? (
+                <img
+                  src={`data:${viewingDoc.fileType};base64,${viewingDoc.fileData}`}
+                  alt={viewingDoc.name}
+                  className="max-w-full mx-auto block p-4"
+                />
+              ) : viewingDoc.fileType === "application/pdf" ? (
+                <iframe
+                  src={`data:application/pdf;base64,${viewingDoc.fileData}`}
+                  className="w-full h-full min-h-[70vh] border-0"
+                  title={viewingDoc.name}
+                />
+              ) : viewingDoc.fileType.startsWith("text/") ? (
+                <pre className="p-5 text-xs whitespace-pre-wrap break-all font-mono text-foreground">
+                  {atob(viewingDoc.fileData)}
+                </pre>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-20 gap-4 text-muted-foreground">
+                  <FileText className="w-16 h-16 opacity-20" />
+                  <p className="text-sm">Preview not available for this file type.</p>
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([Uint8Array.from(atob(viewingDoc.fileData), c => c.charCodeAt(0))], { type: viewingDoc.fileType || "application/octet-stream" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a"); a.href = url; a.download = viewingDoc.name; a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
+                    <Download className="w-4 h-4" /> Download to open
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
