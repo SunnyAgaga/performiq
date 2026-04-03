@@ -1,57 +1,97 @@
 import { Router } from "express";
 import { Op, fn, col, literal } from "sequelize";
-import { Conversation, Agent } from "../models/index.js";
+import { Conversation, Agent, Message } from "../models/index.js";
 import { requireAuth, AuthRequest } from "../middlewares/auth.js";
 
 const router = Router();
 
 router.get("/analytics", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const last30Days = new Date();
-    last30Days.setDate(last30Days.getDate() - 30);
+    const days = parseInt((req.query.days as string) ?? "30");
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
 
-    const volumeByChannel = await Conversation.findAll({
-      where: { createdAt: { [Op.gte]: last30Days } },
-      attributes: ["channel", [fn("COUNT", col("id")), "count"]],
+    // ── Summary counts ────────────────────────────────────────────────────
+    const [totalReceived, totalSent, aiMessages] = await Promise.all([
+      Message.count({ where: { sender: "customer", createdAt: { [Op.gte]: since } } }),
+      Message.count({ where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.gte]: since } } }),
+      Message.count({ where: { sender: "bot", createdAt: { [Op.gte]: since } } }),
+    ]);
+
+    // ── Top channel by conversation count ─────────────────────────────────
+    const channelVolumes = await Conversation.findAll({
+      attributes: ["channel", [fn("COUNT", col("id")), "cnt"]],
       group: ["channel"],
+      order: [[literal("cnt"), "DESC"]],
       raw: true,
-    }) as unknown as Array<{ channel: string; count: string }>;
+    }) as unknown as Array<{ channel: string; cnt: string }>;
 
+    const topChannelRow = channelVolumes[0] ?? { channel: "whatsapp", cnt: "0" };
+
+    // ── Daily trend (received vs sent) ────────────────────────────────────
+    const dailyTrend: Array<{ date: string; received: number; sent: number }> = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const day = new Date();
+      day.setDate(day.getDate() - i);
+      day.setHours(0, 0, 0, 0);
+      const next = new Date(day);
+      next.setDate(next.getDate() + 1);
+
+      const [recv, sent] = await Promise.all([
+        Message.count({ where: { sender: "customer", createdAt: { [Op.between]: [day, next] } } }),
+        Message.count({ where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.between]: [day, next] } } }),
+      ]);
+
+      dailyTrend.push({
+        date: day.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        received: recv,
+        sent,
+      });
+    }
+
+    // ── Per-channel stats ─────────────────────────────────────────────────
+    const channelNames = ["whatsapp", "facebook", "instagram"] as const;
+    const channelStats = await Promise.all(
+      channelNames.map(async (channel) => {
+        const convIds = (
+          await Conversation.findAll({ where: { channel }, attributes: ["id"], raw: true })
+        ).map((c: unknown) => (c as { id: number }).id);
+
+        if (convIds.length === 0) {
+          return { channel, received: 0, sent: 0, aiMessages: 0 };
+        }
+
+        const [received, sent, ai] = await Promise.all([
+          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: "customer", createdAt: { [Op.gte]: since } } }),
+          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.gte]: since } } }),
+          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: "bot", createdAt: { [Op.gte]: since } } }),
+        ]);
+
+        return { channel, received, sent, aiMessages: ai };
+      })
+    );
+
+    // ── Agent performance (kept for backward compat) ──────────────────────
     const agentPerformance = await Agent.findAll({
       attributes: ["id", "name", "avatar", "resolvedToday", "rating", "activeConversations"],
       order: [["resolvedToday", "DESC"]],
       limit: 10,
     });
 
-    const dailyVolume: Array<{ date: string; open: number; resolved: number }> = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      d.setHours(0, 0, 0, 0);
-      const next = new Date(d);
-      next.setDate(next.getDate() + 1);
-
-      const [openCount, resolvedCount] = await Promise.all([
-        Conversation.count({ where: { createdAt: { [Op.between]: [d, next] }, status: { [Op.in]: ["open", "pending"] } } }),
-        Conversation.count({ where: { updatedAt: { [Op.between]: [d, next] }, status: "resolved" } }),
-      ]);
-
-      dailyVolume.push({
-        date: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-        open: openCount,
-        resolved: resolvedCount,
-      });
-    }
-
     res.json({
-      volumeByChannel: volumeByChannel.map((r) => ({ channel: r.channel, count: parseInt(r.count) })),
-      agentPerformance,
-      dailyVolume,
       summary: {
-        avgResponseTime: 8.3,
-        csatScore: 4.6,
-        totalResolved: agentPerformance.reduce((sum, a) => sum + a.resolvedToday, 0),
+        totalReceived,
+        totalSent,
+        aiMessages,
+        aiPercentage: totalSent > 0 ? Math.round((aiMessages / totalSent) * 100) : 0,
+        topChannel: topChannelRow.channel,
+        topChannelCount: parseInt(topChannelRow.cnt),
       },
+      dailyTrend,
+      channelStats,
+      agentPerformance,
+      days,
     });
   } catch (err) {
     console.error(err);
