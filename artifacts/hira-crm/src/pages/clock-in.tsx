@@ -9,6 +9,7 @@ import {
   ZoomIn, ShieldCheck, ShieldAlert, ShieldQuestion, ScanFace, UserCircle2,
   Activity, MessageSquare, CheckCheck, Hourglass, WifiOff as WifiOffIcon,
   CalendarClock, Plus, Pencil, Trash2, X,
+  Laptop, Smartphone, Tablet, Globe,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,59 @@ function getLocation(): Promise<LatLng> {
       { timeout: 8000, maximumAge: 30000 }
     );
   });
+}
+
+// ── Device fingerprint ────────────────────────────────────────────────────────
+const DEVICE_ID_KEY = "crm_device_id";
+
+function getOrCreateDeviceId(): string {
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if (!id) {
+    id = `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    localStorage.setItem(DEVICE_ID_KEY, id);
+  }
+  return id;
+}
+
+function detectDeviceType(): string {
+  const ua = navigator.userAgent;
+  const hasTouchPoints = navigator.maxTouchPoints > 1;
+  if (/iPad/i.test(ua) || (/Macintosh/i.test(ua) && hasTouchPoints)) return "Tablet";
+  if (/tablet|playbook|silk/i.test(ua)) return "Tablet";
+  if (/Mobile|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)) return "Mobile";
+  return "Desktop";
+}
+
+function detectBrowser(): string {
+  const ua = navigator.userAgent;
+  if (/Edg\//i.test(ua))          return "Edge";
+  if (/SamsungBrowser/i.test(ua)) return "Samsung Browser";
+  if (/OPR\//i.test(ua))          return "Opera";
+  if (/Chrome\//i.test(ua))       return "Chrome";
+  if (/Firefox\//i.test(ua))      return "Firefox";
+  if (/Safari\//i.test(ua))       return "Safari";
+  if (/MSIE|Trident\//i.test(ua)) return "Internet Explorer";
+  return "Unknown";
+}
+
+function detectOs(): string {
+  const ua = navigator.userAgent;
+  if (/Windows/i.test(ua))     return "Windows";
+  if (/iPhone|iPad|iPod/i.test(ua)) return "iOS";
+  if (/Android/i.test(ua))     return "Android";
+  if (/Mac OS X/i.test(ua))    return "macOS";
+  if (/CrOS/i.test(ua))        return "ChromeOS";
+  if (/Linux/i.test(ua))       return "Linux";
+  return "Unknown";
+}
+
+function getDeviceInfo() {
+  return {
+    deviceId:      getOrCreateDeviceId(),
+    deviceType:    detectDeviceType(),
+    deviceBrowser: detectBrowser(),
+    deviceOs:      detectOs(),
+  };
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -488,6 +542,41 @@ function LocationCell({ log }: { log: any }) {
           </a>
         : log.clockOut ? <span className="text-xs text-muted-foreground">Out: —</span> : null}
       <PingsCell logId={log.id} />
+    </div>
+  );
+}
+
+function DeviceCell({ log }: { log: any }) {
+  const type    = log.deviceType    as string | null;
+  const browser = log.deviceBrowser as string | null;
+  const os      = log.deviceOs      as string | null;
+  const id      = log.deviceId      as string | null;
+
+  if (!type && !browser && !os) {
+    return <span className="text-xs text-muted-foreground">—</span>;
+  }
+
+  const DeviceIcon = type === "Mobile" ? Smartphone : type === "Tablet" ? Tablet : Laptop;
+  const deviceColor =
+    type === "Mobile"  ? "text-blue-500"   :
+    type === "Tablet"  ? "text-purple-500"  :
+    "text-emerald-600";
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1.5">
+        <DeviceIcon className={`w-3.5 h-3.5 shrink-0 ${deviceColor}`} />
+        <span className="text-xs font-medium">{type ?? "Unknown"}</span>
+      </div>
+      {browser && (
+        <div className="flex items-center gap-1.5">
+          <Globe className="w-3 h-3 shrink-0 text-muted-foreground/60" />
+          <span className="text-[11px] text-muted-foreground">{browser} · {os ?? "—"}</span>
+        </div>
+      )}
+      {id && (
+        <span className="text-[10px] text-muted-foreground/50 font-mono truncate max-w-[100px]" title={id}>{id.slice(0, 12)}…</span>
+      )}
     </div>
   );
 }
@@ -1298,13 +1387,14 @@ export default function ClockIn() {
   // ── Clock in / out mutations ──────────────────────────────────────────────
   const clockIn = useMutation({
     mutationFn: async ({ faceImage, photoTime }: { faceImage: string | null; photoTime: string | null }) => {
-      const loc = await getLocation();
+      const [loc, device] = await Promise.all([getLocation(), Promise.resolve(getDeviceInfo())]);
       return crmFetch("/attendance/clock-in", {
         method: "POST",
         body: JSON.stringify({
           ...(loc ? { lat: loc.lat, lng: loc.lng } : {}),
           ...(faceImage ? { faceImage } : {}),
           ...(photoTime ? { photoTime } : {}),
+          ...device,
         }),
       });
     },
@@ -1318,13 +1408,14 @@ export default function ClockIn() {
 
   const clockOut = useMutation({
     mutationFn: async ({ faceImage, photoTime }: { faceImage: string | null; photoTime: string | null }) => {
-      const loc = await getLocation();
+      const [loc, device] = await Promise.all([getLocation(), Promise.resolve(getDeviceInfo())]);
       return crmFetch("/attendance/clock-out", {
         method: "POST",
         body: JSON.stringify({
           ...(loc ? { lat: loc.lat, lng: loc.lng } : {}),
           ...(faceImage ? { faceImage } : {}),
           ...(photoTime ? { photoTime } : {}),
+          ...device,
         }),
       });
     },
@@ -1564,6 +1655,7 @@ export default function ClockIn() {
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Clock Out</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Duration</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Shift</th>
+                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Device</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Photos</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Location</th>
                 <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
@@ -1571,10 +1663,10 @@ export default function ClockIn() {
             </thead>
             <tbody className="divide-y divide-border">
               {logsLoading ? (
-                <tr><td colSpan={isManager ? 9 : 8} className="text-center py-10 text-muted-foreground">Loading…</td></tr>
+                <tr><td colSpan={isManager ? 10 : 9} className="text-center py-10 text-muted-foreground">Loading…</td></tr>
               ) : (logs as any[]).length === 0 ? (
                 <tr>
-                  <td colSpan={isManager ? 9 : 8} className="text-center py-10 text-muted-foreground">
+                  <td colSpan={isManager ? 10 : 9} className="text-center py-10 text-muted-foreground">
                     <Timer className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     No attendance records yet
                   </td>
@@ -1587,6 +1679,7 @@ export default function ClockIn() {
                   <td className="px-4 py-3">{fmtTime(log.clockOut)}</td>
                   <td className="px-4 py-3">{fmtDuration(log.durationMinutes)}</td>
                   <td className="px-4 py-3"><ShiftBenchmarkBadge log={log} /></td>
+                  <td className="px-4 py-3"><DeviceCell log={log} /></td>
                   <td className="px-4 py-3"><FaceCell log={log} isManager={isManager} onReviewClick={setReviewLog} /></td>
                   <td className="px-4 py-3"><LocationCell log={log} /></td>
                   <td className="px-4 py-3"><StatusBadge log={log} /></td>

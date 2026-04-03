@@ -23,6 +23,10 @@ export interface AgentAttendanceAttributes {
   shiftStartExpected: string | null;
   shiftGraceMinutes: number | null;
   clockInDiffMinutes: number | null;
+  deviceId: string | null;
+  deviceType: string | null;
+  deviceBrowser: string | null;
+  deviceOs: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -49,6 +53,10 @@ export interface AgentAttendanceCreationAttributes
     | "shiftStartExpected"
     | "shiftGraceMinutes"
     | "clockInDiffMinutes"
+    | "deviceId"
+    | "deviceType"
+    | "deviceBrowser"
+    | "deviceOs"
   > {}
 
 export class AgentAttendance
@@ -76,6 +84,10 @@ export class AgentAttendance
   declare shiftStartExpected: string | null;
   declare shiftGraceMinutes: number | null;
   declare clockInDiffMinutes: number | null;
+  declare deviceId: string | null;
+  declare deviceType: string | null;
+  declare deviceBrowser: string | null;
+  declare deviceOs: string | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -108,6 +120,10 @@ AgentAttendance.init(
     shiftStartExpected: { type: DataTypes.STRING(5), allowNull: true, field: "shift_start_expected" },
     shiftGraceMinutes: { type: DataTypes.INTEGER, allowNull: true, field: "shift_grace_minutes" },
     clockInDiffMinutes: { type: DataTypes.INTEGER, allowNull: true, field: "clock_in_diff_minutes" },
+    deviceId: { type: DataTypes.STRING(64), allowNull: true, field: "device_id" },
+    deviceType: { type: DataTypes.STRING(20), allowNull: true, field: "device_type" },
+    deviceBrowser: { type: DataTypes.STRING(40), allowNull: true, field: "device_browser" },
+    deviceOs: { type: DataTypes.STRING(40), allowNull: true, field: "device_os" },
   },
   {
     sequelize,

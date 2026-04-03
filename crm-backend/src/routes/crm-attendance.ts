@@ -59,7 +59,7 @@ router.get("/attendance/today", requireAuth, async (req: AuthRequest, res) => {
 router.post("/attendance/clock-in", requireAuth, async (req: AuthRequest, res) => {
   try {
     const agentId = req.agent!.id;
-    const { lat, lng, faceImage, photoTime } = req.body;
+    const { lat, lng, faceImage, photoTime, deviceId, deviceType, deviceBrowser, deviceOs } = req.body;
     const today = new Date().toISOString().split("T")[0];
 
     const existing = await AgentAttendance.findOne({
@@ -82,6 +82,10 @@ router.post("/attendance/clock-in", requireAuth, async (req: AuthRequest, res) =
       shiftStartExpected,
       shiftGraceMinutes,
       clockInDiffMinutes,
+      deviceId: deviceId ?? null,
+      deviceType: deviceType ?? null,
+      deviceBrowser: deviceBrowser ?? null,
+      deviceOs: deviceOs ?? null,
     });
     res.json(log);
   } catch (err) {
