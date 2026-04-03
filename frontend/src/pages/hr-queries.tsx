@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { PageHeader } from "@/components/shared";
@@ -158,136 +158,201 @@ function QueryFormDialog({
 
 // ── Query Detail Sheet ────────────────────────────────────────────────────────
 function QueryDetailSheet({
-  query, isHR, onClose, onUpdate, onDelete,
+  query, isHR, currentUser, onClose, onUpdate, onDelete,
 }: {
   query: any;
   isHR: boolean;
+  currentUser: any;
   onClose: () => void;
   onUpdate: (id: number, data: any) => void;
   onDelete: (id: number) => void;
 }) {
-  const [response, setResponse] = useState(query.response ?? "");
+  const { toast } = useToast();
+  const [messages, setMessages] = useState<any[]>([]);
+  const [msgsLoading, setMsgsLoading] = useState(true);
+  const [msgText, setMsgText] = useState("");
+  const [sending, setSending] = useState(false);
   const [newStatus, setNewStatus] = useState(query.status);
   const [newPriority, setNewPriority] = useState(query.priority);
   const [editOpen, setEditOpen] = useState(false);
+  const [liveQuery, setLiveQuery] = useState(query);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const canEdit = !isHR && query.status === "open";
+  const isClosed = liveQuery.status === "closed";
+  const canEdit = !isHR && liveQuery.status === "open";
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setMsgsLoading(true);
+      try {
+        const res = await apiFetchBase(`/api/hr-queries/${query.id}/messages`);
+        if (!cancelled && res.ok) setMessages(await res.json());
+      } finally {
+        if (!cancelled) setMsgsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [query.id]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = async () => {
+    const body = msgText.trim();
+    if (!body || sending) return;
+    setSending(true);
+    try {
+      const res = await apiFetchBase(`/api/hr-queries/${query.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error ?? "Failed");
+      const msg = await res.json();
+      setMessages(prev => [...prev, msg]);
+      setMsgText("");
+      // If HR sent first reply, query moves to in_progress
+      if (isHR && liveQuery.status === "open") {
+        const updated = { ...liveQuery, status: "in_progress" };
+        setLiveQuery(updated);
+        setNewStatus("in_progress");
+        onUpdate(query.id, { status: "in_progress" });
+      }
+    } catch (err: any) {
+      toast({ title: err.message || "Failed to send", variant: "destructive" });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const saveSettings = () => {
+    onUpdate(query.id, { status: newStatus, priority: newPriority });
+    setLiveQuery((p: any) => ({ ...p, status: newStatus, priority: newPriority }));
+    toast({ title: "Query updated" });
+  };
 
   return (
     <>
       <Sheet open onOpenChange={v => !v && onClose()}>
-        <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
-          <SheetHeader className="mb-4">
-            <SheetTitle className="text-base leading-snug pr-6">{query.title}</SheetTitle>
+        <SheetContent className="w-full sm:max-w-xl flex flex-col p-0 gap-0">
+          {/* Header */}
+          <SheetHeader className="px-5 pt-5 pb-3 border-b shrink-0">
+            <SheetTitle className="text-base leading-snug pr-6">{liveQuery.title}</SheetTitle>
             <div className="flex flex-wrap gap-2 mt-1">
-              {statusBadge(query.status)}
-              {priorityBadge(query.priority)}
-              <Badge variant="outline" className="text-xs">{catLabel(query.category)}</Badge>
+              {statusBadge(liveQuery.status)}
+              {priorityBadge(liveQuery.priority)}
+              <Badge variant="outline" className="text-xs">{catLabel(liveQuery.category)}</Badge>
+            </div>
+            <div className="text-xs text-muted-foreground mt-1">
+              {isHR && query.submitter && <span>From <strong>{query.submitter.name}</strong> · </span>}
+              {fmtDate(query.createdAt)}
             </div>
           </SheetHeader>
 
-          {/* Meta */}
-          <div className="text-xs text-muted-foreground space-y-1 mb-4">
-            {isHR && query.submitter && (
-              <div className="flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5" />
-                <span>Submitted by <strong>{query.submitter.name}</strong> ({query.submitter.email})</span>
-              </div>
-            )}
-            <div>Submitted on {fmtDate(query.createdAt)}</div>
-            {query.respondedAt && (
-              <div>Responded on {fmtDate(query.respondedAt)}
-                {query.responder ? ` by ${query.responder.name}` : ""}
-              </div>
-            )}
-          </div>
-
-          {/* Description */}
-          <div className="mb-5">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">Query Details</p>
-            <div className="bg-muted/50 rounded-lg p-3 text-sm whitespace-pre-wrap">{query.description}</div>
-          </div>
-
-          {/* HR Response (view) */}
-          {query.response && !isHR && (
-            <div className="mb-5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1.5">HR Response</p>
-              <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3 text-sm whitespace-pre-wrap">{query.response}</div>
-            </div>
-          )}
-
-          {/* HR Panel */}
+          {/* HR controls (status / priority) */}
           {isHR && (
-            <div className="space-y-4 border-t pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">HR Actions</p>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Status</Label>
-                  <Select value={newStatus} onValueChange={setNewStatus}>
-                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.filter(s => s.value !== "all").map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-xs">Priority</Label>
-                  <Select value={newPriority} onValueChange={setNewPriority}>
-                    <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PRIORITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+            <div className="px-5 py-3 border-b bg-muted/30 shrink-0 flex flex-wrap items-end gap-3">
+              <div className="flex-1 min-w-[110px]">
+                <Label className="text-xs">Status</Label>
+                <Select value={newStatus} onValueChange={setNewStatus}>
+                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.filter(s => s.value !== "all").map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-
-              <div>
-                <Label className="text-xs">Response / Notes</Label>
-                <Textarea
-                  className="mt-1 min-h-[120px] text-sm"
-                  placeholder="Write your response to the employee here..."
-                  value={response}
-                  onChange={e => setResponse(e.target.value)}
-                />
+              <div className="flex-1 min-w-[110px]">
+                <Label className="text-xs">Priority</Label>
+                <Select value={newPriority} onValueChange={setNewPriority}>
+                  <SelectTrigger className="mt-1 h-8 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PRIORITIES.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-
               <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  onClick={() => {
-                    onUpdate(query.id, { status: newStatus, priority: newPriority, response: response || undefined });
-                    onClose();
-                  }}
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  Save & Respond
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  title="Delete query"
-                  onClick={() => { onDelete(query.id); onClose(); }}
-                >
-                  <Trash2 className="w-4 h-4" />
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={saveSettings}>Save</Button>
+                <Button size="sm" variant="destructive" className="h-8 text-xs" onClick={() => { onDelete(query.id); onClose(); }}>
+                  <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </div>
           )}
 
-          {/* Employee actions */}
-          {!isHR && (
-            <div className="border-t pt-4 flex gap-2">
+          {/* Chat thread */}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+            {/* Original query as first bubble */}
+            <div className="flex flex-col items-start gap-1">
+              <span className="text-[11px] text-muted-foreground px-1">
+                {query.submitter?.name ?? "Employee"} · {fmtDate(query.createdAt)}
+              </span>
+              <div className="max-w-[85%] bg-muted rounded-2xl rounded-tl-sm px-4 py-2.5 text-sm whitespace-pre-wrap">
+                {query.description}
+              </div>
+            </div>
+
+            {/* Message thread */}
+            {msgsLoading ? (
+              <div className="text-center text-xs text-muted-foreground py-4">Loading messages…</div>
+            ) : (
+              messages.map(msg => {
+                const isMine = msg.senderId === currentUser?.id;
+                const isHRMsg = ["super_admin", "admin"].includes(msg.senderRole);
+                return (
+                  <div key={msg.id} className={`flex flex-col gap-1 ${isMine ? "items-end" : "items-start"}`}>
+                    <span className="text-[11px] text-muted-foreground px-1">
+                      {msg.senderName}{isHRMsg ? " (HR)" : ""} · {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}, {fmtDate(msg.createdAt)}
+                    </span>
+                    <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                      isMine
+                        ? "bg-primary text-primary-foreground rounded-tr-sm"
+                        : isHRMsg
+                          ? "bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100 rounded-tl-sm"
+                          : "bg-muted rounded-tl-sm"
+                    }`}>
+                      {msg.body}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+
+            {isClosed && (
+              <div className="text-center text-xs text-muted-foreground py-2 border-t">
+                This query has been closed.
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Message input */}
+          {!isClosed && (
+            <div className="px-4 py-3 border-t bg-background shrink-0">
               {canEdit && (
-                <Button variant="outline" className="gap-2" onClick={() => setEditOpen(true)}>
-                  <Pencil className="w-4 h-4" /> Edit Query
-                </Button>
+                <div className="flex gap-2 mb-2">
+                  <Button variant="outline" size="sm" className="text-xs gap-1.5 h-7" onClick={() => setEditOpen(true)}>
+                    <Pencil className="w-3 h-3" /> Edit Query
+                  </Button>
+                  <Button variant="outline" size="sm" className="text-xs gap-1.5 h-7 text-destructive hover:text-destructive" onClick={() => { onDelete(query.id); onClose(); }}>
+                    <Trash2 className="w-3 h-3" /> Delete
+                  </Button>
+                </div>
               )}
-              {canEdit && (
-                <Button variant="outline" className="gap-2 text-destructive hover:text-destructive" onClick={() => { onDelete(query.id); onClose(); }}>
-                  <Trash2 className="w-4 h-4" /> Delete
+              <div className="flex gap-2 items-end">
+                <Textarea
+                  className="flex-1 min-h-[44px] max-h-32 text-sm resize-none"
+                  placeholder={isHR ? "Reply to employee…" : "Send a follow-up message to HR…"}
+                  value={msgText}
+                  onChange={e => setMsgText(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  disabled={sending}
+                />
+                <Button size="icon" onClick={sendMessage} disabled={!msgText.trim() || sending} className="shrink-0 h-10 w-10">
+                  <Send className="w-4 h-4" />
                 </Button>
-              )}
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">Press Enter to send · Shift+Enter for new line</p>
             </div>
           )}
         </SheetContent>
@@ -586,6 +651,7 @@ export default function HrQueries() {
         <QueryDetailSheet
           query={selected}
           isHR={isHR}
+          currentUser={user}
           onClose={() => setSelected(null)}
           onUpdate={(id, data) => updateMutation.mutate({ id, data })}
           onDelete={id => deleteMutation.mutate(id)}

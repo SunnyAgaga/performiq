@@ -1,4 +1,5 @@
 import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { usersTable } from "./users";
 
 export const hrQueriesTable = pgTable("hr_queries", {
   id: serial("id").primaryKey(),
@@ -16,4 +17,13 @@ export const hrQueriesTable = pgTable("hr_queries", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const hrQueryMessagesTable = pgTable("hr_query_messages", {
+  id: serial("id").primaryKey(),
+  queryId: integer("query_id").notNull().references(() => hrQueriesTable.id, { onDelete: "cascade" }),
+  senderId: integer("sender_id").notNull().references(() => usersTable.id),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type HrQuery = typeof hrQueriesTable.$inferSelect;
+export type HrQueryMessage = typeof hrQueryMessagesTable.$inferSelect;

@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, hrQueriesTable, usersTable } from "../db/index.js";
+import { db, hrQueriesTable, hrQueryMessagesTable, usersTable } from "../db/index.js";
 import { requireAuth, AuthRequest } from "../middlewares/auth.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, asc } from "drizzle-orm";
 
 const router = Router();
 
@@ -126,6 +126,77 @@ router.put("/hr-queries/:id", requireAuth, async (req: AuthRequest, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to update query" });
+  }
+});
+
+// GET /api/hr-queries/:id/messages
+router.get("/hr-queries/:id/messages", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const user = req.user!;
+    const id = parseInt(req.params.id);
+    const [q] = await db.select().from(hrQueriesTable).where(eq(hrQueriesTable.id, id)).limit(1);
+    if (!q) return res.status(404).json({ error: "Not found" });
+    const isHR = ["super_admin", "admin"].includes(user.role) || (user as any).customRole?.name?.toLowerCase() === "hr manager";
+    if (!isHR && q.userId !== user.id) return res.status(403).json({ error: "Forbidden" });
+
+    const msgs = await db
+      .select({
+        id: hrQueryMessagesTable.id,
+        queryId: hrQueryMessagesTable.queryId,
+        senderId: hrQueryMessagesTable.senderId,
+        body: hrQueryMessagesTable.body,
+        createdAt: hrQueryMessagesTable.createdAt,
+        senderName: usersTable.name,
+        senderRole: usersTable.role,
+      })
+      .from(hrQueryMessagesTable)
+      .leftJoin(usersTable, eq(hrQueryMessagesTable.senderId, usersTable.id))
+      .where(eq(hrQueryMessagesTable.queryId, id))
+      .orderBy(asc(hrQueryMessagesTable.createdAt));
+
+    res.json(msgs);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/hr-queries/:id/messages
+router.post("/hr-queries/:id/messages", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const user = req.user!;
+    const id = parseInt(req.params.id);
+    const { body } = req.body;
+    if (!body?.trim()) return res.status(400).json({ error: "Message body required" });
+
+    const [q] = await db.select().from(hrQueriesTable).where(eq(hrQueriesTable.id, id)).limit(1);
+    if (!q) return res.status(404).json({ error: "Not found" });
+    const isHR = ["super_admin", "admin"].includes(user.role) || (user as any).customRole?.name?.toLowerCase() === "hr manager";
+    if (!isHR && q.userId !== user.id) return res.status(403).json({ error: "Forbidden" });
+    if (q.status === "closed") return res.status(400).json({ error: "Query is closed" });
+
+    const [msg] = await db.insert(hrQueryMessagesTable).values({
+      queryId: id,
+      senderId: user.id,
+      body: body.trim(),
+    }).returning();
+
+    // If HR sends a message, mark query in_progress / update respondedBy
+    if (isHR && q.status === "open") {
+      await db.update(hrQueriesTable).set({
+        status: "in_progress",
+        respondedBy: user.id,
+        respondedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(hrQueriesTable.id, id));
+    } else {
+      await db.update(hrQueriesTable).set({ updatedAt: new Date() }).where(eq(hrQueriesTable.id, id));
+    }
+
+    res.status(201).json({ ...msg, senderName: user.name, senderRole: user.role });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
