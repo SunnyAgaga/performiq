@@ -3,6 +3,7 @@ import { useListGoals, useCreateGoal, useUpdateGoal, useDeleteGoal, useListUsers
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Input, Label, EmptyState } from "@/components/shared";
 import { Target, Plus, X, Trash2, Edit2, CheckCircle2 } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function Goals() {
@@ -70,6 +71,35 @@ export default function Goals() {
     }
   };
 
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const visibleGoals = goals ?? [];
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selectedIds.size === visibleGoals.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(visibleGoals.map(g => g.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} selected goal(s)?`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id =>
+      new Promise<void>(resolve => deleteMutation.mutate({ id }, { onSuccess: () => resolve(), onError: () => resolve() }))
+    ));
+    queryClient.invalidateQueries({ queryKey: ["/api/goals"] });
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
   if (isLoading) return <div className="p-8">Loading goals...</div>;
 
   return (
@@ -77,6 +107,8 @@ export default function Goals() {
       <PageHeader title="Performance Goals" description="Track objectives and key results.">
         <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2"/> New Goal</Button>
       </PageHeader>
+
+      {isAdmin && <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {goals?.length === 0 && (
@@ -86,9 +118,19 @@ export default function Goals() {
         )}
         
         {goals?.map(goal => (
-          <Card key={goal.id} className="p-6 flex flex-col relative group">
+          <Card key={goal.id} className={`p-6 flex flex-col relative group ${selectedIds.has(goal.id) ? "ring-2 ring-primary/30" : ""}`}>
             <div className="flex justify-between items-start mb-3">
-              <StatusBadge status={goal.status} type="goal" />
+              <div className="flex items-center gap-2">
+                {(user?.role === 'admin' || user?.role === 'super_admin' || user?.id === goal.userId) && (
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(goal.id)}
+                    onChange={() => toggleSelect(goal.id)}
+                    className="w-4 h-4 accent-primary cursor-pointer"
+                  />
+                )}
+                <StatusBadge status={goal.status} type="goal" />
+              </div>
               {(user?.role === 'admin' || user?.role === 'super_admin' || user?.id === goal.userId) && (
                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => openEdit(goal)} className="p-1 text-muted-foreground hover:text-primary"><Edit2 className="w-4 h-4" /></button>

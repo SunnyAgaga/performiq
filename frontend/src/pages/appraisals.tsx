@@ -3,7 +3,8 @@ import { useListAppraisals, useCreateAppraisal, useListCycles, useListUsers } fr
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, EmptyState, Label } from "@/components/shared";
 import { format } from "date-fns";
-import { ClipboardList, Plus, X, Search, ChevronDown, ArrowUp, ArrowDown, UserPlus } from "lucide-react";
+import { ClipboardList, Plus, X, Search, ChevronDown, ArrowUp, ArrowDown, UserPlus, Trash2 } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
 import { apiFetch } from "@/lib/utils";
@@ -58,6 +59,36 @@ export default function Appraisals() {
   }, [appraisals, search, filterStatus, filterCycle]);
 
   const activeFilters = search || filterStatus || filterCycle;
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selectedIds.size === filteredAppraisals.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredAppraisals.map(a => a.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} selected appraisal(s)? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id => apiFetch(`/api/appraisals/${id}`, { method: "DELETE" })));
+    queryClient.invalidateQueries({ queryKey: ["/api/appraisals"] });
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
+  const handleDeleteOne = async (id: number) => {
+    if (!confirm("Delete this appraisal? This cannot be undone.")) return;
+    await apiFetch(`/api/appraisals/${id}`, { method: "DELETE" });
+    queryClient.invalidateQueries({ queryKey: ["/api/appraisals"] });
+  };
 
   const WORKFLOW_OPTIONS = [
     { value: "self_only",      label: "Self Only",           desc: "Employee self-review → Completed" },
@@ -164,6 +195,8 @@ export default function Appraisals() {
         </p>
       )}
 
+      {isAdmin && <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />}
+
       <Card className="overflow-hidden">
         {appraisals?.length === 0 ? (
           <EmptyState title="No appraisals found" description="There are no active appraisals right now." icon={ClipboardList} />
@@ -174,6 +207,16 @@ export default function Appraisals() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-muted/50 border-b border-border text-sm font-semibold text-muted-foreground">
+                  {isAdmin && (
+                    <th className="p-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={filteredAppraisals.length > 0 && selectedIds.size === filteredAppraisals.length}
+                        onChange={toggleAll}
+                        className="w-4 h-4 accent-primary cursor-pointer"
+                      />
+                    </th>
+                  )}
                   <th className="p-4">Employee</th>
                   <th className="p-4">Cycle</th>
                   <th className="p-4 hidden md:table-cell">Reviewer</th>
@@ -184,7 +227,17 @@ export default function Appraisals() {
               </thead>
               <tbody className="divide-y divide-border">
                 {filteredAppraisals.map((app) => (
-                  <tr key={app.id} className="hover:bg-muted/30 transition-colors">
+                  <tr key={app.id} className={`hover:bg-muted/30 transition-colors ${selectedIds.has(app.id) ? "bg-primary/5" : ""}`}>
+                    {isAdmin && (
+                      <td className="p-4 w-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(app.id)}
+                          onChange={() => toggleSelect(app.id)}
+                          className="w-4 h-4 accent-primary cursor-pointer"
+                        />
+                      </td>
+                    )}
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
@@ -211,9 +264,16 @@ export default function Appraisals() {
                       )}
                     </td>
                     <td className="p-4 text-right">
-                      <Link href={`/appraisals/${app.id}`}>
-                        <Button variant="outline" size="sm">View</Button>
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <Link href={`/appraisals/${app.id}`}>
+                          <Button variant="outline" size="sm">View</Button>
+                        </Link>
+                        {isAdmin && (
+                          <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteOne(app.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

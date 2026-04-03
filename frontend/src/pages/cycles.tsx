@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Input, Label, EmptyState } from "@/components/shared";
 import { format } from "date-fns";
 import { Calendar, Plus, Edit2, Trash2, X } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function Cycles() {
@@ -76,6 +77,34 @@ export default function Cycles() {
     }
   };
 
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const visibleCycles = cycles ?? [];
+
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selectedIds.size === visibleCycles.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(visibleCycles.map(c => c.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} selected cycle(s)?`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id =>
+      new Promise<void>(resolve => deleteMutation.mutate({ id }, { onSuccess: () => resolve(), onError: () => resolve() }))
+    ));
+    queryClient.invalidateQueries({ queryKey: ["/api/cycles"] });
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
   if (isLoading) return <div className="p-8">Loading cycles...</div>;
 
   return (
@@ -91,19 +120,31 @@ export default function Cycles() {
       {!cycles?.length ? (
         <EmptyState title="No cycles found" description="Create an appraisal cycle to start tracking performance." icon={Calendar} action={(user?.role === 'admin' || user?.role === 'super_admin') && <Button onClick={openCreate}>Create Cycle</Button>} />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {cycles.map((cycle) => (
-            <Card key={cycle.id} className="flex flex-col relative group">
-              <div className="p-6 flex-1">
-                <div className="flex justify-between items-start mb-4">
-                  <StatusBadge status={cycle.status} type="cycle" />
-                  {(user?.role === 'admin' || user?.role === 'super_admin') && (
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => openEdit(cycle)} className="p-1.5 text-muted-foreground hover:text-primary bg-muted rounded-md"><Edit2 className="w-4 h-4" /></button>
-                      <button onClick={() => handleDelete(cycle.id)} className="p-1.5 text-muted-foreground hover:text-destructive bg-muted rounded-md"><Trash2 className="w-4 h-4" /></button>
+        <>
+          {isAdmin && <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {cycles.map((cycle) => (
+              <Card key={cycle.id} className={`flex flex-col relative group ${selectedIds.has(cycle.id) ? "ring-2 ring-primary/30" : ""}`}>
+                <div className="p-6 flex-1">
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-2">
+                      {isAdmin && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(cycle.id)}
+                          onChange={() => toggleSelect(cycle.id)}
+                          className="w-4 h-4 accent-primary cursor-pointer"
+                        />
+                      )}
+                      <StatusBadge status={cycle.status} type="cycle" />
                     </div>
-                  )}
-                </div>
+                    {isAdmin && (
+                      <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => openEdit(cycle)} className="p-1.5 text-muted-foreground hover:text-primary bg-muted rounded-md"><Edit2 className="w-4 h-4" /></button>
+                        <button onClick={() => handleDelete(cycle.id)} className="p-1.5 text-muted-foreground hover:text-destructive bg-muted rounded-md"><Trash2 className="w-4 h-4" /></button>
+                      </div>
+                    )}
+                  </div>
                 <h3 className="text-xl font-bold text-foreground mb-4">{cycle.name}</h3>
                 
                 <div className="space-y-3">
@@ -120,8 +161,9 @@ export default function Cycles() {
                 </div>
               </div>
             </Card>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       {/* Modal Dialog */}

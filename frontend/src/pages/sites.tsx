@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, Button, Input, Label } from "@/components/shared";
 import { MapPin, Plus, Edit, Trash2, X, AlertCircle, Globe } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetch } from "@/lib/utils";
 
@@ -93,6 +94,30 @@ export default function Sites() {
     }
   };
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selectedIds.size === sites.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(sites.map(s => s.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} selected site(s)? Users assigned to them will be unlinked.`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id => apiFetch(`/api/sites/${id}`, { method: "DELETE" })));
+    await refresh();
+    queryClient.invalidateQueries({ queryKey: ["/api/sites"] });
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
   if (user?.role !== "admin" && user?.role !== "super_admin") {
     return <div className="p-8 text-destructive">Unauthorized</div>;
   }
@@ -115,38 +140,49 @@ export default function Sites() {
           <Button className="mt-4" onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> Add Site</Button>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {sites.map(site => (
-            <Card key={site.id} className="p-5 flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <MapPin className="w-4 h-4 text-primary" />
+        <>
+          <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {sites.map(site => (
+              <Card key={site.id} className={`p-5 flex flex-col gap-3 ${selectedIds.has(site.id) ? "ring-2 ring-primary/30" : ""}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(site.id)}
+                      onChange={() => toggleSelect(site.id)}
+                      className="mt-1 w-4 h-4 accent-primary cursor-pointer shrink-0"
+                    />
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <MapPin className="w-4 h-4 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{site.name}</p>
+                        {(site.city || site.country) && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Globe className="w-3 h-3" />
+                            {[site.city, site.country].filter(Boolean).join(", ")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-foreground truncate">{site.name}</p>
-                    {(site.city || site.country) && (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Globe className="w-3 h-3" />
-                        {[site.city, site.country].filter(Boolean).join(", ")}
-                      </p>
-                    )}
+                  <div className="flex gap-1 shrink-0">
+                    <button onClick={() => openEdit(site)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
+                      <Edit className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(site.id, site.name)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-1 shrink-0">
-                  <button onClick={() => openEdit(site)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors">
-                    <Edit className="w-3.5 h-3.5" />
-                  </button>
-                  <button onClick={() => handleDelete(site.id, site.name)} className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-              {site.address && <p className="text-sm text-muted-foreground">{site.address}</p>}
-              {site.description && <p className="text-sm text-muted-foreground italic">{site.description}</p>}
-            </Card>
-          ))}
-        </div>
+                {site.address && <p className="text-sm text-muted-foreground">{site.address}</p>}
+                {site.description && <p className="text-sm text-muted-foreground italic">{site.description}</p>}
+              </Card>
+            ))}
+          </div>
+        </>
       )}
 
       {isDialogOpen && (

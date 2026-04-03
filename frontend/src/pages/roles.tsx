@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, Button, Input, Label, EmptyState } from "@/components/shared";
 import { Shield, Plus, Edit, Trash2, X, LayoutDashboard, ClipboardList, Target, RefreshCcw, ListChecks, Users, BarChart3, Building2, MapPin, CalendarDays, Clock, ClipboardCheck, UserPlus } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetch } from "@/lib/utils";
 
@@ -110,6 +111,29 @@ export default function Roles() {
     refreshRoles();
   };
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selectedIds.size === roles.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(roles.map(r => r.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} selected role(s)? Assigned users will lose their custom role label.`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id => apiFetch(`/api/custom-roles/${id}`, { method: "DELETE" })));
+    refreshRoles();
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
   if (user?.role !== "admin" && user?.role !== "super_admin") return <div className="p-8 text-destructive">Unauthorized</div>;
   if (loading) return <div className="p-8 animate-pulse text-muted-foreground">Loading roles...</div>;
 
@@ -131,6 +155,8 @@ export default function Roles() {
         ))}
       </div>
 
+      <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />
+
       <Card className="overflow-hidden">
         {roles.length === 0 ? (
           <EmptyState
@@ -142,6 +168,14 @@ export default function Roles() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-muted/50 border-b text-sm text-muted-foreground">
+                <th className="p-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={roles.length > 0 && selectedIds.size === roles.length}
+                    onChange={toggleAll}
+                    className="w-4 h-4 accent-primary cursor-pointer"
+                  />
+                </th>
                 <th className="p-4">Role Name</th>
                 <th className="p-4">Permission Level</th>
                 <th className="p-4 hidden md:table-cell">Menu Access</th>
@@ -154,7 +188,15 @@ export default function Roles() {
                 const pl = PERMISSION_LEVELS.find(p => p.value === r.permissionLevel);
                 const menuCount = r.menuPermissions?.length ?? 0;
                 return (
-                  <tr key={r.id} className="hover:bg-muted/30">
+                  <tr key={r.id} className={`hover:bg-muted/30 ${selectedIds.has(r.id) ? "bg-primary/5" : ""}`}>
+                    <td className="p-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(r.id)}
+                        onChange={() => toggleSelect(r.id)}
+                        className="w-4 h-4 accent-primary cursor-pointer"
+                      />
+                    </td>
                     <td className="p-4 font-semibold">{r.name}</td>
                     <td className="p-4">
                       <span className={`text-xs font-bold px-2 py-1 rounded capitalize ${pl?.color ?? 'bg-slate-100 text-slate-700'}`}>

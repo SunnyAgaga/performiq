@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 import { apiFetch as apiFetchBase } from "@/lib/utils";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 async function apiFetch(url: string, opts: RequestInit = {}) {
@@ -384,6 +385,31 @@ export default function HrQueries() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = (items: any[]) => {
+    if (selectedIds.size === items.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(items.map((q: any) => q.id)));
+  };
+
+  const handleBulkDelete = async (items: any[]) => {
+    if (!confirm(`Delete ${selectedIds.size} selected query/queries?`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id =>
+      new Promise<void>(resolve => deleteMutation.mutate(id, { onSuccess: () => resolve(), onError: () => resolve() }))
+    ));
+    qc.invalidateQueries({ queryKey: ["hr-queries"] });
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -498,13 +524,24 @@ export default function HrQueries() {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
+        <>
+          {isHR && <BulkActionBar count={selectedIds.size} onDelete={() => handleBulkDelete(filtered)} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />}
+          <div className="space-y-2">
           {filtered.map((q: any) => (
-            <button
-              key={q.id}
-              onClick={() => setSelected(q)}
-              className="w-full text-left bg-card border rounded-xl px-4 py-3.5 hover:border-primary/40 hover:shadow-sm transition-all group"
-            >
+            <div key={q.id} className="flex items-center gap-2">
+              {isHR && (
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(q.id)}
+                  onChange={() => toggleSelect(q.id)}
+                  onClick={e => e.stopPropagation()}
+                  className="w-4 h-4 accent-primary cursor-pointer shrink-0"
+                />
+              )}
+              <button
+                onClick={() => setSelected(q)}
+                className={`flex-1 text-left bg-card border rounded-xl px-4 py-3.5 hover:border-primary/40 hover:shadow-sm transition-all group ${selectedIds.has(q.id) ? "border-primary/40 bg-primary/5" : ""}`}
+              >
               <div className="flex items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -528,9 +565,11 @@ export default function HrQueries() {
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground mt-1 shrink-0" />
               </div>
-            </button>
+              </button>
+            </div>
           ))}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Submit Dialog */}

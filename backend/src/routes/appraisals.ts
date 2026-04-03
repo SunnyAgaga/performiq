@@ -375,6 +375,21 @@ router.post("/appraisals/:id/reviewers", requireAuth, requireRole("admin"), asyn
   }
 });
 
+// Delete an appraisal entirely (admin only)
+router.delete("/appraisals/:id", requireAuth, requireRole("admin"), async (req: AuthRequest, res) => {
+  try {
+    const id = Number(req.params.id);
+    await db.delete(appraisalReviewersTable).where(eq(appraisalReviewersTable.appraisalId, id));
+    await db.delete(appraisalReviewerScoresTable).where(eq(appraisalReviewerScoresTable.appraisalId, id));
+    await db.delete(appraisalScoresTable).where(eq(appraisalScoresTable.appraisalId, id));
+    await db.delete(appraisalsTable).where(eq(appraisalsTable.id, id));
+    res.json({ message: "Appraisal deleted" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 // Remove a reviewer from an existing appraisal
 router.delete("/appraisals/:id/reviewers/:reviewerId", requireAuth, requireRole("admin"), async (req: AuthRequest, res) => {
   try {

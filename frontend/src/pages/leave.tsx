@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, Button, Input, Label } from "@/components/shared";
-import { CalendarDays, Plus, X, CheckCircle2, XCircle, Clock, Ban, ChevronRight, UserPlus, ArrowUp, ArrowDown } from "lucide-react";
+import { CalendarDays, Plus, X, CheckCircle2, XCircle, Clock, Ban, ChevronRight, UserPlus, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetch } from "@/lib/utils";
 
@@ -167,6 +168,37 @@ export default function Leave() {
 
   const filtered = filterStatus === "all" ? requests : requests.filter(r => r.status === filterStatus);
 
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map(r => r.id)));
+  };
+
+  const handleDeleteOne = async (id: number) => {
+    if (!confirm("Delete this leave request?")) return;
+    await apiFetch(`/api/leave-requests/${id}`, { method: "DELETE" });
+    load();
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} selected leave request(s)?`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id => apiFetch(`/api/leave-requests/${id}`, { method: "DELETE" })));
+    load();
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
   return (
     <div>
       <PageHeader title="Leave Requests" description="Apply for leave and track approval status.">
@@ -201,16 +233,26 @@ export default function Leave() {
           <p className="text-sm text-muted-foreground">Click "Apply for Leave" to submit your first request.</p>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <>
+          {isAdmin && <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />}
+          <div className="space-y-3">
           {filtered.map(req => {
             const isCurrentApprover = req.currentApproverId === user?.id;
             const canReview = isManager && req.status === "pending" && (isCurrentApprover || user?.role === "admin" || user?.role === "super_admin");
 
             return (
-              <Card key={req.id} className="p-5">
+              <Card key={req.id} className={`p-5 ${selectedIds.has(req.id) ? "ring-2 ring-primary/30" : ""}`}>
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex flex-wrap items-center gap-2 mb-1">
+                      {isAdmin && (
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.has(req.id)}
+                          onChange={() => toggleSelect(req.id)}
+                          className="w-4 h-4 accent-primary cursor-pointer"
+                        />
+                      )}
                       <span className="font-semibold text-foreground">{LEAVE_LABEL[req.leaveType] ?? req.leaveType}</span>
                       <StatusBadge status={req.status} />
                     </div>
@@ -277,7 +319,8 @@ export default function Leave() {
               </Card>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
 
       {/* Apply for Leave Modal */}

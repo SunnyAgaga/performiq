@@ -3,6 +3,7 @@ import { useListCriteria, useCreateCriterion, useUpdateCriterion, useDeleteCrite
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, Button, Input, Label, EmptyState } from "@/components/shared";
 import { ListChecks, Plus, X, Trash2, Edit2, Layers, ChevronRight } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetch } from "@/lib/utils";
 
@@ -73,6 +74,33 @@ export default function Criteria() {
   const handleDelete = (id: number) => {
     if (confirm("Delete this criterion? It will also be removed from any groups."))
       deleteMutation.mutate({ id }, { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/criteria"] }) });
+  };
+
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+
+  const [selectedCritIds, setSelectedCritIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleCrit = (id: number) => setSelectedCritIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAllCrit = (items: any[]) => {
+    if (selectedCritIds.size === items.length) setSelectedCritIds(new Set());
+    else setSelectedCritIds(new Set(items.map((c: any) => c.id)));
+  };
+
+  const handleBulkDeleteCrit = async (allItems: any[]) => {
+    if (!confirm(`Delete ${selectedCritIds.size} selected criterion/criteria?`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedCritIds].map(id =>
+      new Promise<void>(resolve => deleteMutation.mutate({ id }, { onSuccess: () => resolve(), onError: () => resolve() }))
+    ));
+    queryClient.invalidateQueries({ queryKey: ["/api/criteria"] });
+    setSelectedCritIds(new Set());
+    setBulkDeleting(false);
   };
 
   // ── Criteria Groups ─────────────────────────────────────────────────
@@ -173,6 +201,7 @@ export default function Criteria() {
       {/* ── CRITERIA TAB ── */}
       {activeTab === "criteria" && (
         <>
+          <BulkActionBar count={selectedCritIds.size} onDelete={() => handleBulkDeleteCrit(criteria ?? [])} onClear={() => setSelectedCritIds(new Set())} deleting={bulkDeleting} />
           {!criteria?.length ? (
             <EmptyState title="No criteria defined" description="Add evaluation metrics to build the appraisal rubrics." icon={ListChecks} />
           ) : (
@@ -182,14 +211,28 @@ export default function Criteria() {
                   <h3 className="text-lg font-bold font-display flex items-center gap-2">
                     <div className="w-2 h-6 bg-primary rounded-full" />
                     {category} Competencies
+                    <button
+                      onClick={() => toggleAllCrit(items)}
+                      className="ml-2 text-xs text-muted-foreground underline font-normal"
+                    >
+                      {items.every(i => selectedCritIds.has(i.id)) ? "Deselect all" : "Select all"}
+                    </button>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {items.map(crit => {
                       const typeInfo = TYPE_LABELS[(crit.type as CriteriaType) ?? "rating"];
                       return (
-                        <Card key={crit.id} className="p-5 flex flex-col group">
+                        <Card key={crit.id} className={`p-5 flex flex-col group ${selectedCritIds.has(crit.id) ? "ring-2 ring-primary/30" : ""}`}>
                           <div className="flex justify-between items-start mb-2">
-                            <span className="font-bold text-foreground">{crit.name}</span>
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={selectedCritIds.has(crit.id)}
+                                onChange={() => toggleCrit(crit.id)}
+                                className="w-4 h-4 accent-primary cursor-pointer shrink-0"
+                              />
+                              <span className="font-bold text-foreground">{crit.name}</span>
+                            </div>
                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button onClick={() => openEdit(crit)} className="text-muted-foreground hover:text-primary"><Edit2 className="w-4 h-4" /></button>
                               <button onClick={() => handleDelete(crit.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-4 h-4" /></button>

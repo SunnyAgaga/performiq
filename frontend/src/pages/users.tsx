@@ -3,6 +3,7 @@ import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser } from "../li
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, Button, Input, Label } from "@/components/shared";
 import { Users as UsersIcon, Plus, Edit, Trash2, X, Search, ChevronDown, AlertCircle, Camera, UserCircle2 } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetch } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -137,6 +138,29 @@ export default function Users() {
     }
   };
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selectedIds.size === filteredUsers.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filteredUsers.map(u => u.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} selected user(s)?`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id => apiFetch(`/api/users/${id}`, { method: "DELETE" })));
+    queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
   if (isLoading) return <div className="p-8">Loading users...</div>;
   if (user?.role !== 'admin' && user?.role !== 'super_admin') return <div className="p-8 text-destructive">Unauthorized</div>;
 
@@ -194,10 +218,20 @@ export default function Users() {
         )}
       </div>
 
+      <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />
+
       <Card className="overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-muted/50 border-b text-sm text-muted-foreground">
+              <th className="p-4 w-10">
+                <input
+                  type="checkbox"
+                  checked={filteredUsers.length > 0 && selectedIds.size === filteredUsers.length}
+                  onChange={toggleAll}
+                  className="w-4 h-4 accent-primary cursor-pointer"
+                />
+              </th>
               <th className="p-4">Name</th>
               <th className="p-4 hidden sm:table-cell">Role</th>
               <th className="p-4 hidden md:table-cell">Department / Title</th>
@@ -207,10 +241,18 @@ export default function Users() {
           </thead>
           <tbody className="divide-y divide-border">
             {filteredUsers.length === 0 && (
-              <tr><td colSpan={5} className="p-8 text-center text-muted-foreground text-sm">No users match the current filters.</td></tr>
+              <tr><td colSpan={6} className="p-8 text-center text-muted-foreground text-sm">No users match the current filters.</td></tr>
             )}
             {filteredUsers.map(u => (
-              <tr key={u.id} className="hover:bg-muted/30">
+              <tr key={u.id} className={`hover:bg-muted/30 ${selectedIds.has(u.id) ? "bg-primary/5" : ""}`}>
+                <td className="p-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(u.id)}
+                    onChange={() => toggleSelect(u.id)}
+                    className="w-4 h-4 accent-primary cursor-pointer"
+                  />
+                </td>
                 <td className="p-4">
                   <div className="font-semibold text-foreground">{u.name}</div>
                   <div className="text-sm text-muted-foreground">{u.email}</div>

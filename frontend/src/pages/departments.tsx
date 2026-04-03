@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { PageHeader, Card, Button, Input, Label } from "@/components/shared";
 import { Building2, Plus, Edit, Trash2, X, Users } from "lucide-react";
+import { BulkActionBar } from "@/components/bulk-action-bar";
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetch } from "@/lib/utils";
 
@@ -77,6 +78,29 @@ export default function Departments() {
     } catch {}
   };
 
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id: number) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  const toggleAll = () => {
+    if (selectedIds.size === departments.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(departments.map(d => d.id)));
+  };
+
+  const handleBulkDelete = async () => {
+    if (!confirm(`Delete ${selectedIds.size} selected department(s)? This won't affect users already assigned to them.`)) return;
+    setBulkDeleting(true);
+    await Promise.all([...selectedIds].map(id => apiFetch(`/api/departments/${id}`, { method: "DELETE" })));
+    fetchDepartments();
+    setSelectedIds(new Set());
+    setBulkDeleting(false);
+  };
+
   if (!isAdmin) return <div className="p-8 text-destructive">Unauthorized</div>;
 
   return (
@@ -100,20 +124,30 @@ export default function Departments() {
       )}
 
       {!loading && departments.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {departments.map(d => (
-            <Card key={d.id} className="p-5 flex flex-col gap-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <Building2 className="w-5 h-5 text-primary" />
+        <>
+          <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {departments.map(d => (
+              <Card key={d.id} className={`p-5 flex flex-col gap-3 ${selectedIds.has(d.id) ? "ring-2 ring-primary/30" : ""}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(d.id)}
+                      onChange={() => toggleSelect(d.id)}
+                      className="mt-1 w-4 h-4 accent-primary cursor-pointer shrink-0"
+                    />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                        <Building2 className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-foreground truncate">{d.name}</p>
+                        {d.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{d.description}</p>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-foreground truncate">{d.name}</p>
-                    {d.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{d.description}</p>}
-                  </div>
-                </div>
-                <div className="flex gap-1 shrink-0">
+                  <div className="flex gap-1 shrink-0">
                   <button
                     onClick={() => openEdit(d)}
                     className="p-1.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
@@ -137,7 +171,8 @@ export default function Departments() {
               </div>
             </Card>
           ))}
-        </div>
+          </div>
+        </>
       )}
 
       {isDialogOpen && (
