@@ -99,7 +99,7 @@ router.post("/ai/chat", requireAuth, async (req: AuthRequest, res) => {
     const anthropic = getAnthropicClient();
 
     const system = systemPrompt ||
-      `You are HiraBot, an intelligent customer service AI assistant. 
+      `You are CommsBot, an intelligent customer service AI assistant. 
 You help customers with their queries efficiently, professionally, and empathetically.
 You can handle questions about orders, products, returns, complaints, and general support.
 Always be polite, helpful, and concise. If you cannot resolve an issue, offer to escalate to a human agent.`;
@@ -165,7 +165,7 @@ router.post("/ai/auto-respond", requireAuth, async (req: AuthRequest, res) => {
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 300,
-      system: `You are HiraBot, a customer service AI. Customer's name is ${customer?.name || "Customer"}. 
+      system: `You are CommsBot, a customer service AI. Customer's name is ${customer?.name || "Customer"}. 
 Keep responses brief (1-2 sentences), professional, and helpful. 
 If the issue requires human intervention, say so and offer to connect them with an agent.`,
       messages: chatHistory.slice(-10),

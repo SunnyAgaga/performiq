@@ -265,7 +265,7 @@ export default function Inbox() {
                     Bot Reply
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>HiraBot auto-responds to customer</TooltipContent>
+                <TooltipContent>CommsBot auto-responds to customer</TooltipContent>
               </Tooltip>
 
               <Select
@@ -348,7 +348,7 @@ export default function Inbox() {
                     <div className="flex items-center gap-2 mt-1.5 px-1">
                       <span className="text-[11px] text-muted-foreground">{format(new Date(msg.createdAt), "HH:mm")}</span>
                       {isMe && <CheckCircle className="h-3 w-3 text-primary/60" />}
-                      {isBot && <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1"><Bot className="h-3 w-3" /> HiraBot</span>}
+                      {isBot && <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1"><Bot className="h-3 w-3" /> CommsBot</span>}
                     </div>
                   </div>
                 </React.Fragment>

@@ -20,7 +20,7 @@ interface ChatMessage {
   isStreaming?: boolean;
 }
 
-const DEFAULT_SYSTEM = `You are HiraBot, an intelligent customer service AI assistant.
+const DEFAULT_SYSTEM = `You are CommsBot, an intelligent customer service AI assistant.
 You help customers with their queries efficiently, professionally, and empathetically.
 You can handle questions about orders, products, returns, complaints, and general support.
 Always be polite, helpful, and concise. If you cannot resolve an issue, offer to escalate to a human agent.`;
@@ -145,7 +145,7 @@ export default function AiChat() {
             <Bot className="h-6 w-6 text-blue-500" />
             Test AI Chat
           </h1>
-          <p className="text-muted-foreground mt-1">Preview how HiraBot responds to your customers.</p>
+          <p className="text-muted-foreground mt-1">Preview how CommsBot responds to your customers.</p>
         </div>
         <div className="flex gap-2">
           {messages.length > 0 && (
@@ -165,7 +165,7 @@ export default function AiChat() {
                 <Bot className="h-4 w-4 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold">HiraBot</p>
+                <p className="text-sm font-semibold">CommsBot</p>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
                   Active · Powered by Claude
@@ -180,7 +180,7 @@ export default function AiChat() {
                 <div className="h-16 w-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-4">
                   <Sparkles className="h-8 w-8 text-blue-500" />
                 </div>
-                <p className="font-medium text-foreground mb-1">HiraBot is ready</p>
+                <p className="font-medium text-foreground mb-1">CommsBot is ready</p>
                 <p className="text-sm text-muted-foreground max-w-xs">
                   Start a conversation to test how the AI handles customer queries. Customize the bot's behavior in the settings panel.
                 </p>
@@ -261,7 +261,7 @@ export default function AiChat() {
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   rows={8}
                   className="text-xs resize-none bg-muted/50 border-none"
-                  placeholder="Define how HiraBot should behave..."
+                  placeholder="Define how CommsBot should behave..."
                 />
               </div>
               <Button
@@ -280,7 +280,7 @@ export default function AiChat() {
               <p className="text-xs font-medium">How this works</p>
               <ul className="text-xs text-muted-foreground space-y-1.5">
                 <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">1</Badge> Customer sends a message on WhatsApp/FB/Instagram</li>
-                <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">2</Badge> HiraBot auto-responds using the system prompt</li>
+                <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">2</Badge> CommsBot auto-responds using the system prompt</li>
                 <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">3</Badge> If unresolved, bot escalates to a human agent</li>
                 <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">4</Badge> Agent replies with AI-suggested messages</li>
               </ul>

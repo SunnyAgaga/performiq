@@ -361,7 +361,7 @@ export default function Channels() {
                     <div className="text-center py-8">
                       <span className="text-5xl mb-4 block">{meta.icon}</span>
                       <p className="text-muted-foreground mb-6 text-sm max-w-sm mx-auto">
-                        Connect your {meta.label} account to start receiving and sending messages through HiraCRM.
+                        Connect your {meta.label} account to start receiving and sending messages through CommsCRM.
                       </p>
 
                       <div className="mb-6 p-4 bg-muted/50 rounded-lg text-left text-sm space-y-2">

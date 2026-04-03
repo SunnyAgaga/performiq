@@ -44,7 +44,7 @@ export default function Login() {
             <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
               <MessageSquare className="h-5 w-5 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold tracking-tight">HiraCRM</span>
+            <span className="text-2xl font-bold tracking-tight">CommsCRM</span>
           </div>
           <p className="text-muted-foreground text-sm">Customer Service Command Centre</p>
         </div>

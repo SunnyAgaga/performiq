@@ -18,7 +18,7 @@ async function start() {
   await seedDatabase();
 
   app.listen(PORT, "0.0.0.0", () => {
-    logger.info(`HiraCRM backend running on port ${PORT}`);
+    logger.info(`CommsCRM backend running on port ${PORT}`);
   });
 }
 

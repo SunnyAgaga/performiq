@@ -48,7 +48,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="h-8 w-8 bg-primary rounded-md flex items-center justify-center text-primary-foreground font-bold text-sm">
             H
           </div>
-          <span className="font-bold text-lg tracking-tight">HiraCRM</span>
+          <span className="font-bold text-lg tracking-tight">CommsCRM</span>
         </div>
 
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
@@ -121,7 +121,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <span className="text-foreground font-medium">
-                {[...navigation, ...toolsNav].find((n) => n.href === location)?.name ?? "HiraCRM"}
+                {[...navigation, ...toolsNav].find((n) => n.href === location)?.name ?? "CommsCRM"}
               </span>
             </div>
           </div>

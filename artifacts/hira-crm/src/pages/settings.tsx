@@ -68,7 +68,7 @@ export default function Settings() {
         <Card>
           <CardHeader>
             <CardTitle>Connected Channels</CardTitle>
-            <CardDescription>Manage the platforms HiraCRM is listening to.</CardDescription>
+            <CardDescription>Manage the platforms CommsCRM is listening to.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-4 border rounded-lg bg-card">
