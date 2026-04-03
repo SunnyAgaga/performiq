@@ -12,9 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Send, Loader2, Bot, User, Trash2, Settings2, Sparkles, Upload, FileText, FileType2, Trash, Eye, X, BookOpen, MessageSquare } from "lucide-react";
+import { Send, Loader2, Bot, User, Trash2, Settings2, Sparkles, Upload, FileText, FileType2, Trash, Eye, X, BookOpen, MessageSquare, CheckCircle2, XCircle, Eye as EyeOn, EyeOff, ChevronDown, Zap, Key } from "lucide-react";
 import { format } from "date-fns";
-import { apiGet, apiDelete, getBaseUrl } from "@/lib/api";
+import { apiGet, apiPut, apiDelete, getBaseUrl } from "@/lib/api";
 
 interface ChatMessage {
   id: string;
@@ -32,10 +32,83 @@ interface KnowledgeDoc {
   createdAt: string;
 }
 
+interface AiProviderSettings {
+  id: number;
+  provider: string;
+  model: string;
+  hasApiKey: boolean;
+  baseUrl: string | null;
+  temperature: number;
+  maxTokens: number;
+}
+
 const DEFAULT_SYSTEM = `You are CommsBot, an intelligent customer service AI assistant.
 You help customers with their queries efficiently, professionally, and empathetically.
 You can handle questions about orders, products, returns, complaints, and general support.
 Always be polite, helpful, and concise. If you cannot resolve an issue, offer to escalate to a human agent.`;
+
+const PROVIDER_META: Record<string, { label: string; color: string; icon: string; models: string[]; defaultModel: string; needsKey: boolean; needsUrl: boolean; keyPlaceholder: string; urlPlaceholder: string; hint: string }> = {
+  gemini: {
+    label: "Gemini (Built-in)",
+    color: "bg-blue-500",
+    icon: "✦",
+    models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-3-flash-preview", "gemini-3-pro-preview"],
+    defaultModel: "gemini-2.5-flash",
+    needsKey: false,
+    needsUrl: false,
+    keyPlaceholder: "",
+    urlPlaceholder: "",
+    hint: "Uses Replit's built-in Gemini integration — no API key needed. Usage is billed to your Replit credits.",
+  },
+  gemini_own: {
+    label: "Gemini (Own Key)",
+    color: "bg-blue-600",
+    icon: "✦",
+    models: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-pro", "gemini-1.5-flash"],
+    defaultModel: "gemini-2.5-flash",
+    needsKey: true,
+    needsUrl: false,
+    keyPlaceholder: "AIzaSy...",
+    urlPlaceholder: "",
+    hint: "Use your own Google AI Studio API key. Get one at aistudio.google.com.",
+  },
+  openai: {
+    label: "OpenAI",
+    color: "bg-emerald-500",
+    icon: "⬡",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"],
+    defaultModel: "gpt-4o-mini",
+    needsKey: true,
+    needsUrl: false,
+    keyPlaceholder: "sk-...",
+    urlPlaceholder: "",
+    hint: "Use your OpenAI API key from platform.openai.com/api-keys.",
+  },
+  anthropic: {
+    label: "Anthropic Claude",
+    color: "bg-amber-600",
+    icon: "◈",
+    models: ["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022"],
+    defaultModel: "claude-haiku-4-5",
+    needsKey: true,
+    needsUrl: false,
+    keyPlaceholder: "sk-ant-...",
+    urlPlaceholder: "",
+    hint: "Use your Anthropic API key from console.anthropic.com/settings/keys.",
+  },
+  custom: {
+    label: "Custom / OpenAI-compatible",
+    color: "bg-purple-600",
+    icon: "⚙",
+    models: [],
+    defaultModel: "",
+    needsKey: true,
+    needsUrl: true,
+    keyPlaceholder: "sk-...",
+    urlPlaceholder: "https://api.example.com/v1",
+    hint: "Any OpenAI-compatible API endpoint — Ollama, Azure OpenAI, LM Studio, Together AI, Groq, etc.",
+  },
+};
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`;
@@ -46,6 +119,10 @@ function formatBytes(bytes: number) {
 function fileIcon(mimeType: string) {
   if (mimeType === "application/pdf") return <FileType2 className="h-5 w-5 text-red-500" />;
   return <FileText className="h-5 w-5 text-blue-500" />;
+}
+
+function providerLabel(provider: string) {
+  return PROVIDER_META[provider]?.label ?? provider;
 }
 
 export default function AiChat() {
@@ -66,9 +143,43 @@ export default function AiChat() {
   const [previewDoc, setPreviewDoc] = useState<{ name: string; content: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Provider settings form state
+  const [editProvider, setEditProvider] = useState("gemini");
+  const [editModel, setEditModel] = useState("gemini-2.5-flash");
+  const [editApiKey, setEditApiKey] = useState("");
+  const [editBaseUrl, setEditBaseUrl] = useState("");
+  const [editTemp, setEditTemp] = useState(0.7);
+  const [editMaxTokens, setEditMaxTokens] = useState(8192);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
+
+  // Load AI provider settings
+  const { data: aiSettings } = useQuery<AiProviderSettings>({
+    queryKey: ["ai-settings"],
+    queryFn: () => apiGet("/ai/settings"),
+    onSuccess: (data) => {
+      setEditProvider(data.provider);
+      setEditModel(data.model);
+      setEditBaseUrl(data.baseUrl ?? "");
+      setEditTemp(data.temperature);
+      setEditMaxTokens(data.maxTokens);
+    },
+  } as Parameters<typeof useQuery>[0]);
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => apiPut("/ai/settings", data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["ai-settings"] });
+      setTestResult(null);
+      toast({ title: "AI settings saved!", description: `Now using ${providerLabel(editProvider)} · ${editModel}` });
+    },
+    onError: () => toast({ title: "Failed to save settings", variant: "destructive" }),
+  });
 
   // Knowledge base queries
   const { data: docs = [], isLoading: docsLoading } = useQuery<KnowledgeDoc[]>({
@@ -97,22 +208,14 @@ export default function AiChat() {
       toast({ title: "File too large", description: "Maximum file size is 10 MB.", variant: "destructive" });
       return;
     }
-
     setIsUploading(true);
     try {
       const token = localStorage.getItem("crm_token");
       const baseUrl = getBaseUrl();
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch(`${baseUrl}/ai/knowledge-base`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || "Upload failed");
-      }
+      const res = await fetch(`${baseUrl}/ai/knowledge-base`, { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: formData });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || "Upload failed"); }
       qc.invalidateQueries({ queryKey: ["knowledge-docs"] });
       toast({ title: "Document uploaded!", description: `"${file.name}" is now part of the AI knowledge base.` });
     } catch (err: unknown) {
@@ -125,17 +228,14 @@ export default function AiChat() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    files.forEach(uploadFile);
+    Array.from(e.dataTransfer.files).forEach(uploadFile);
   }, [uploadFile]);
 
   const previewDocument = async (doc: KnowledgeDoc) => {
     try {
       const token = localStorage.getItem("crm_token");
       const baseUrl = getBaseUrl();
-      const res = await fetch(`${baseUrl}/ai/knowledge-base/${doc.id}/preview`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`${baseUrl}/ai/knowledge-base/${doc.id}/preview`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
       setPreviewDoc({ name: doc.originalName, content: data.content });
     } catch {
@@ -143,34 +243,67 @@ export default function AiChat() {
     }
   };
 
+  const testConnection = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const token = localStorage.getItem("crm_token");
+      const baseUrl = getBaseUrl();
+      const res = await fetch(`${baseUrl}/ai/settings/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ provider: editProvider, model: editModel, apiKey: editApiKey || undefined, baseUrl: editBaseUrl || undefined }),
+      });
+      const data = await res.json();
+      setTestResult(data);
+    } catch {
+      setTestResult({ ok: false, message: "Network error — could not reach the backend." });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const saveSettings = () => {
+    saveSettingsMutation.mutate({
+      provider: editProvider,
+      model: editModel,
+      apiKey: editApiKey || undefined,
+      baseUrl: editBaseUrl || undefined,
+      temperature: editTemp,
+      maxTokens: editMaxTokens,
+    });
+  };
+
+  const handleProviderChange = (p: string) => {
+    setEditProvider(p);
+    const meta = PROVIDER_META[p];
+    if (meta?.defaultModel) setEditModel(meta.defaultModel);
+    setEditApiKey("");
+    setTestResult(null);
+  };
+
   const sendMessage = async () => {
     if (!input.trim() || isStreaming) return;
-
     const userMessage: ChatMessage = { id: Date.now().toString(), role: "user", content: input.trim(), timestamp: new Date() };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
     setIsStreaming(true);
-
     const assistantId = (Date.now() + 1).toString();
     setMessages((prev) => [...prev, { id: assistantId, role: "assistant", content: "", timestamp: new Date(), isStreaming: true }]);
-
     try {
       const token = localStorage.getItem("crm_token");
       const baseUrl = getBaseUrl();
       abortRef.current = new AbortController();
-
       const response = await fetch(`${baseUrl}/ai/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ systemPrompt, messages: updatedMessages.map((m) => ({ role: m.role, content: m.content })) }),
         signal: abortRef.current.signal,
       });
-
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = "";
-
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
@@ -180,10 +313,7 @@ export default function AiChat() {
             if (!line.startsWith("data: ")) continue;
             try {
               const data = JSON.parse(line.slice(6));
-              if (data.content) {
-                fullContent += data.content;
-                setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: fullContent, isStreaming: !data.done } : m));
-              }
+              if (data.content) { fullContent += data.content; setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: fullContent, isStreaming: !data.done } : m)); }
               if (data.done) setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, isStreaming: false } : m));
             } catch {}
           }
@@ -198,11 +328,8 @@ export default function AiChat() {
     }
   };
 
-  const clearChat = () => {
-    if (abortRef.current) abortRef.current.abort();
-    setMessages([]);
-    setIsStreaming(false);
-  };
+  const clearChat = () => { if (abortRef.current) abortRef.current.abort(); setMessages([]); setIsStreaming(false); };
+  const currentMeta = PROVIDER_META[aiSettings?.provider ?? "gemini"];
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
@@ -212,22 +339,28 @@ export default function AiChat() {
             <Bot className="h-6 w-6 text-blue-500" />
             AI Assistant
           </h1>
-          <p className="text-muted-foreground mt-1">Configure CommsBot, manage your knowledge base, and test AI responses.</p>
+          <p className="text-muted-foreground mt-1">Configure your AI provider, manage the knowledge base, and test responses.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Badge className="gap-1.5 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400">
-            <Sparkles className="h-3 w-3" /> Powered by Gemini
-          </Badge>
+          {aiSettings && (
+            <Badge className="gap-1.5 bg-muted border text-foreground">
+              <span className="font-bold">{currentMeta?.icon}</span>
+              {providerLabel(aiSettings.provider)} · {aiSettings.model}
+            </Badge>
+          )}
           {docs.length > 0 && (
             <Badge variant="secondary" className="gap-1.5">
-              <BookOpen className="h-3 w-3" /> {docs.length} doc{docs.length !== 1 ? "s" : ""} in KB
+              <BookOpen className="h-3 w-3" /> {docs.length} KB doc{docs.length !== 1 ? "s" : ""}
             </Badge>
           )}
         </div>
       </div>
 
-      <Tabs defaultValue="knowledge">
+      <Tabs defaultValue="settings">
         <TabsList className="mb-6">
+          <TabsTrigger value="settings" className="gap-2">
+            <Settings2 className="h-4 w-4" /> AI Provider
+          </TabsTrigger>
           <TabsTrigger value="knowledge" className="gap-2">
             <BookOpen className="h-4 w-4" /> Knowledge Base
             {docs.length > 0 && <span className="ml-0.5 h-2 w-2 rounded-full bg-green-500 inline-block" />}
@@ -235,10 +368,234 @@ export default function AiChat() {
           <TabsTrigger value="chat" className="gap-2">
             <MessageSquare className="h-4 w-4" /> Test Chat
           </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-2">
-            <Settings2 className="h-4 w-4" /> Bot Settings
+          <TabsTrigger value="prompt" className="gap-2">
+            <Zap className="h-4 w-4" /> System Prompt
           </TabsTrigger>
         </TabsList>
+
+        {/* AI Provider Tab */}
+        <TabsContent value="settings">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
+            <div className="space-y-5">
+              {/* Provider selector */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">AI Provider</CardTitle>
+                  <CardDescription>Choose which AI service powers CommsBot's replies, suggestions, and auto-responses.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {Object.entries(PROVIDER_META).map(([key, meta]) => (
+                      <button
+                        key={key}
+                        onClick={() => handleProviderChange(key)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${editProvider === key ? "border-primary bg-primary/5" : "border-muted hover:border-muted-foreground/40 hover:bg-muted/30"}`}
+                      >
+                        <div className={`h-9 w-9 rounded-lg ${meta.color} flex items-center justify-center text-white font-bold text-lg shrink-0`}>
+                          {meta.icon}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-tight">{meta.label}</p>
+                          <p className="text-xs text-muted-foreground truncate">{meta.needsKey ? "Requires API key" : "No key needed"}</p>
+                        </div>
+                        {editProvider === key && <CheckCircle2 className="h-4 w-4 text-primary ml-auto shrink-0" />}
+                      </button>
+                    ))}
+                  </div>
+
+                  {PROVIDER_META[editProvider]?.hint && (
+                    <div className="p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground flex items-start gap-2">
+                      <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5 text-blue-500" />
+                      {PROVIDER_META[editProvider].hint}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Model + credentials */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Model & Credentials</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Model selector */}
+                  <div>
+                    <Label className="text-sm">Model</Label>
+                    {PROVIDER_META[editProvider]?.models.length > 0 ? (
+                      <div className="relative mt-1.5">
+                        <select
+                          className="w-full h-9 rounded-md border bg-background px-3 pr-8 text-sm appearance-none"
+                          value={editModel}
+                          onChange={(e) => setEditModel(e.target.value)}
+                        >
+                          {PROVIDER_META[editProvider].models.map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                        <ChevronDown className="h-4 w-4 absolute right-2.5 top-2.5 text-muted-foreground pointer-events-none" />
+                      </div>
+                    ) : (
+                      <Input
+                        className="mt-1.5"
+                        placeholder="e.g. llama3.2, mistral, deepseek-r1"
+                        value={editModel}
+                        onChange={(e) => setEditModel(e.target.value)}
+                      />
+                    )}
+                  </div>
+
+                  {/* API Key */}
+                  {PROVIDER_META[editProvider]?.needsKey && (
+                    <div>
+                      <Label className="text-sm flex items-center gap-1.5">
+                        <Key className="h-3.5 w-3.5" /> API Key
+                        {aiSettings?.hasApiKey && <Badge variant="secondary" className="text-[10px] h-4">stored</Badge>}
+                      </Label>
+                      <div className="relative mt-1.5">
+                        <Input
+                          type={showApiKey ? "text" : "password"}
+                          placeholder={aiSettings?.hasApiKey ? "••••••••• (leave blank to keep existing)" : PROVIDER_META[editProvider].keyPlaceholder}
+                          value={editApiKey}
+                          onChange={(e) => setEditApiKey(e.target.value)}
+                          className="pr-10"
+                        />
+                        <button onClick={() => setShowApiKey((v) => !v)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
+                          {showApiKey ? <EyeOff className="h-4 w-4" /> : <EyeOn className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Base URL */}
+                  {PROVIDER_META[editProvider]?.needsUrl && (
+                    <div>
+                      <Label className="text-sm">Base URL</Label>
+                      <Input
+                        className="mt-1.5"
+                        placeholder={PROVIDER_META[editProvider].urlPlaceholder}
+                        value={editBaseUrl}
+                        onChange={(e) => setEditBaseUrl(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">The root URL of the OpenAI-compatible API (without /chat/completions)</p>
+                    </div>
+                  )}
+
+                  {/* Advanced */}
+                  <Separator />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm">Temperature <span className="text-muted-foreground">({editTemp})</span></Label>
+                      <input
+                        type="range"
+                        min="0" max="1" step="0.1"
+                        value={editTemp}
+                        onChange={(e) => setEditTemp(parseFloat(e.target.value))}
+                        className="w-full mt-2"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-0.5">
+                        <span>Precise</span><span>Creative</span>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm">Max Tokens</Label>
+                      <Input
+                        type="number"
+                        min="256" max="32768" step="256"
+                        value={editMaxTokens}
+                        onChange={(e) => setEditMaxTokens(parseInt(e.target.value))}
+                        className="mt-1.5"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Test result */}
+                  {testResult && (
+                    <div className={`p-3 rounded-lg border text-xs flex items-start gap-2 ${testResult.ok ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900 dark:text-green-400" : "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-900 dark:text-red-400"}`}>
+                      {testResult.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                      <span>{testResult.message}</span>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <Button variant="outline" onClick={testConnection} disabled={isTesting} className="gap-2">
+                      {isTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                      Test Connection
+                    </Button>
+                    <Button onClick={saveSettings} disabled={saveSettingsMutation.isPending} className="gap-2">
+                      {saveSettingsMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                      Save & Apply
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right: guide */}
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Which provider should I use?</CardTitle>
+                </CardHeader>
+                <CardContent className="text-xs text-muted-foreground space-y-3">
+                  <div>
+                    <p className="font-medium text-foreground mb-1">✦ Gemini (Built-in)</p>
+                    <p>Fastest to get started, no API key required. Powered by Replit's integration.</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground mb-1">✦ Gemini (Own Key)</p>
+                    <p>Use your Google AI Studio key for higher rate limits and model access.</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground mb-1">⬡ OpenAI</p>
+                    <p>GPT-4o is excellent for complex reasoning. GPT-4o-mini is faster and cheaper.</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground mb-1">◈ Anthropic Claude</p>
+                    <p>Strong at following instructions and nuanced tone. Great for customer service.</p>
+                  </div>
+                  <div>
+                    <p className="font-medium text-foreground mb-1">⚙ Custom</p>
+                    <p>Connect any OpenAI-compatible API — Ollama (local), Groq, Together AI, Azure OpenAI, LM Studio, and more.</p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Current configuration</CardTitle>
+                </CardHeader>
+                <CardContent className="text-xs space-y-1.5">
+                  {aiSettings ? (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Provider</span>
+                        <span className="font-medium">{providerLabel(aiSettings.provider)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Model</span>
+                        <span className="font-medium">{aiSettings.model}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">API Key</span>
+                        <span className={aiSettings.hasApiKey ? "text-green-600" : "text-muted-foreground"}>{aiSettings.hasApiKey ? "Stored ✓" : aiSettings.provider === "gemini" ? "Built-in" : "Not set"}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Temperature</span>
+                        <span className="font-medium">{aiSettings.temperature}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Max tokens</span>
+                        <span className="font-medium">{aiSettings.maxTokens.toLocaleString()}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-muted-foreground">Loading…</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </TabsContent>
 
         {/* Knowledge Base Tab */}
         <TabsContent value="knowledge">
@@ -247,9 +604,7 @@ export default function AiChat() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Upload Documents & SOPs</CardTitle>
-                  <CardDescription>
-                    Upload PDF, TXT, MD, or CSV files. The AI will reference these when responding to customers — the more specific your SOPs, the better the answers.
-                  </CardDescription>
+                  <CardDescription>Upload PDF, TXT, MD, or CSV files. The AI will reference these when responding to customers.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div
@@ -259,14 +614,7 @@ export default function AiChat() {
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".pdf,.txt,.md,.csv"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => Array.from(e.target.files || []).forEach(uploadFile)}
-                    />
+                    <input ref={fileInputRef} type="file" accept=".pdf,.txt,.md,.csv" multiple className="hidden" onChange={(e) => Array.from(e.target.files || []).forEach(uploadFile)} />
                     {isUploading ? (
                       <div className="flex flex-col items-center gap-3">
                         <Loader2 className="h-10 w-10 text-primary animate-spin" />
@@ -287,7 +635,6 @@ export default function AiChat() {
                 </CardContent>
               </Card>
 
-              {/* Uploaded documents list */}
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center justify-between">
@@ -316,13 +663,7 @@ export default function AiChat() {
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => previewDocument(doc)}>
                               <Eye className="h-3.5 w-3.5" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive hover:text-destructive"
-                              onClick={() => deleteMutation.mutate(doc.id)}
-                              disabled={deleteMutation.isPending}
-                            >
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteMutation.mutate(doc.id)} disabled={deleteMutation.isPending}>
                               <Trash className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -334,48 +675,22 @@ export default function AiChat() {
               </Card>
             </div>
 
-            {/* Right panel: how it works */}
             <div className="space-y-4">
               <Card className="border-blue-200 dark:border-blue-900 bg-blue-50/50 dark:bg-blue-950/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm flex items-center gap-2 text-blue-700 dark:text-blue-400">
-                    <Sparkles className="h-4 w-4" /> Powered by Gemini
+                    <Sparkles className="h-4 w-4" /> How the knowledge base works
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="text-xs text-blue-700 dark:text-blue-400 space-y-2">
-                  <p>CommsBot uses <strong>Google Gemini 2.5 Flash</strong> for all AI responses — including auto-replies, reply suggestions, and the test chat.</p>
-                  <p>No API key required. Usage is billed to your Replit credits.</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="py-3 px-4">
-                  <CardTitle className="text-sm">How the knowledge base works</CardTitle>
-                </CardHeader>
-                <CardContent className="px-4 pb-4 space-y-3 text-xs text-muted-foreground">
-                  <div className="flex gap-2">
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">1</Badge>
-                    <span>Upload your documents: SOPs, FAQs, product info, return policies, pricing guides</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">2</Badge>
-                    <span>The AI reads and references all uploaded documents when generating responses</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">3</Badge>
-                    <span>Customer questions get answers grounded in your actual company policies</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">4</Badge>
-                    <span>Use the Test Chat tab to verify the AI knows your content before going live</span>
-                  </div>
-                  <Separator />
-                  <p className="font-medium text-foreground">Best practices</p>
+                  <p>Every document you upload is automatically injected into the AI's context. The AI references them when replying to customers.</p>
+                  <p className="font-medium mt-2">Best for:</p>
                   <ul className="space-y-1 list-disc pl-4">
-                    <li>Keep documents concise and factual</li>
-                    <li>Use clear headings in your SOPs</li>
-                    <li>Upload one file per topic for better organization</li>
-                    <li>Update documents when policies change</li>
+                    <li>Return / refund policies</li>
+                    <li>Product FAQs</li>
+                    <li>Support SOPs</li>
+                    <li>Pricing guides</li>
+                    <li>Company info</li>
                   </ul>
                 </CardContent>
               </Card>
@@ -397,7 +712,8 @@ export default function AiChat() {
                       <p className="text-sm font-semibold">CommsBot</p>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <span className="h-1.5 w-1.5 rounded-full bg-green-500 inline-block" />
-                        Active · Gemini 2.5 Flash{docs.length > 0 ? ` · ${docs.length} KB doc${docs.length !== 1 ? "s" : ""}` : ""}
+                        {aiSettings ? `${providerLabel(aiSettings.provider)} · ${aiSettings.model}` : "Loading..."}
+                        {docs.length > 0 ? ` · ${docs.length} KB doc${docs.length !== 1 ? "s" : ""}` : ""}
                       </p>
                     </div>
                   </div>
@@ -417,13 +733,11 @@ export default function AiChat() {
                     </div>
                     <p className="font-medium text-foreground mb-1">CommsBot is ready</p>
                     <p className="text-sm text-muted-foreground max-w-xs mb-4">
-                      Test how the AI responds. {docs.length > 0 ? `It has access to ${docs.length} knowledge base document${docs.length !== 1 ? "s" : ""}.` : "Upload documents in the Knowledge Base tab to improve responses."}
+                      {docs.length > 0 ? `It has access to ${docs.length} knowledge base document${docs.length !== 1 ? "s" : ""}.` : "Upload documents in the Knowledge Base tab to improve responses."}
                     </p>
                     <div className="flex flex-wrap gap-2 justify-center">
                       {["What are your business hours?", "How do I return a product?", "I have a complaint"].map((q) => (
-                        <button key={q} onClick={() => setInput(q)} className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 border text-muted-foreground hover:text-foreground transition-colors">
-                          {q}
-                        </button>
+                        <button key={q} onClick={() => setInput(q)} className="text-xs px-3 py-1.5 rounded-full bg-muted hover:bg-muted/80 border text-muted-foreground hover:text-foreground transition-colors">{q}</button>
                       ))}
                     </div>
                   </div>
@@ -457,14 +771,7 @@ export default function AiChat() {
 
               <div className="p-3 border-t">
                 <div className="flex gap-2">
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    placeholder="Type a test message..."
-                    disabled={isStreaming}
-                    className="bg-muted/50 border-none"
-                  />
+                  <Input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} placeholder="Type a test message..." disabled={isStreaming} className="bg-muted/50 border-none" />
                   <Button onClick={sendMessage} disabled={!input.trim() || isStreaming} size="icon">
                     {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
@@ -472,88 +779,53 @@ export default function AiChat() {
               </div>
             </Card>
 
-            <Card>
-              <CardHeader className="py-3 px-4">
-                <CardTitle className="text-sm">How this works</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-2">
-                <ul className="text-xs text-muted-foreground space-y-1.5">
-                  <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">1</Badge> Customer sends a message on WhatsApp/FB/Instagram</li>
-                  <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">2</Badge> CommsBot auto-responds using your system prompt + knowledge base</li>
-                  <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">3</Badge> If unresolved, bot escalates to a human agent</li>
-                  <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">4</Badge> Agent replies with AI-suggested messages (also KB-aware)</li>
-                </ul>
-              </CardContent>
-            </Card>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader className="py-3 px-4"><CardTitle className="text-sm">How this works</CardTitle></CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <ul className="text-xs text-muted-foreground space-y-1.5">
+                    <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">1</Badge> Customer sends a message</li>
+                    <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">2</Badge> CommsBot auto-responds using your prompt + knowledge base</li>
+                    <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">3</Badge> Unresolved issues escalate to a human agent</li>
+                    <li className="flex gap-2"><Badge variant="secondary" className="text-[10px] h-4 px-1 shrink-0">4</Badge> Agent replies with AI-suggested messages</li>
+                  </ul>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
-        {/* Bot Settings Tab */}
-        <TabsContent value="settings">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+        {/* System Prompt Tab */}
+        <TabsContent value="prompt">
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">System Prompt</CardTitle>
-                <CardDescription>This defines CommsBot's personality, tone, and behavior. The knowledge base content is automatically appended to this prompt.</CardDescription>
+                <CardDescription>Defines CommsBot's personality, tone, and behavior. Knowledge base content is appended automatically.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Textarea
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  rows={12}
+                  rows={14}
                   className="text-sm resize-none bg-muted/50 border-none font-mono"
                   placeholder="Define how CommsBot should behave..."
                 />
                 <div className="flex gap-3">
-                  <Button variant="outline" onClick={() => setSystemPrompt(DEFAULT_SYSTEM)}>
-                    Reset to Default
-                  </Button>
-                  <Button onClick={() => toast({ title: "System prompt saved for this session" })}>
-                    Save Prompt
-                  </Button>
+                  <Button variant="outline" onClick={() => setSystemPrompt(DEFAULT_SYSTEM)}>Reset to Default</Button>
+                  <Button onClick={() => toast({ title: "System prompt saved for this session" })}>Save Prompt</Button>
                 </div>
               </CardContent>
             </Card>
-
             <div className="space-y-4">
               <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">AI Model</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between p-3 rounded-lg border bg-muted/30">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-blue-500" />
-                      <div>
-                        <p className="text-sm font-medium">Gemini 2.5 Flash</p>
-                        <p className="text-xs text-muted-foreground">Google · Fast & capable</p>
-                      </div>
-                    </div>
-                    <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 text-xs">Active</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Gemini 2.5 Flash is optimized for customer service: fast responses, multi-turn conversation, and excellent instruction following.</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Knowledge Base Status</CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm space-y-2">
-                  {docs.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No documents uploaded yet. Go to the Knowledge Base tab to add SOPs and reference materials.</p>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {docs.slice(0, 5).map((d) => (
-                        <div key={d.id} className="flex items-center gap-2 text-xs">
-                          {fileIcon(d.mimeType)}
-                          <span className="truncate text-muted-foreground">{d.originalName}</span>
-                          <span className="ml-auto text-muted-foreground shrink-0">{formatBytes(d.sizeBytes)}</span>
-                        </div>
-                      ))}
-                      {docs.length > 5 && <p className="text-xs text-muted-foreground">+{docs.length - 5} more</p>}
-                    </div>
-                  )}
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Tips for a good system prompt</CardTitle></CardHeader>
+                <CardContent className="text-xs text-muted-foreground space-y-2">
+                  <p>• State the bot's name and role clearly</p>
+                  <p>• Specify the tone (professional, friendly, formal)</p>
+                  <p>• List what it can and cannot do</p>
+                  <p>• Tell it when to escalate to a human</p>
+                  <p>• Mention the company name and industry</p>
                 </CardContent>
               </Card>
             </div>
@@ -561,23 +833,17 @@ export default function AiChat() {
         </TabsContent>
       </Tabs>
 
-      {/* Document Preview Dialog */}
       <Dialog open={!!previewDoc} onOpenChange={(o) => !o && setPreviewDoc(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />
-              {previewDoc?.name}
-            </DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><FileText className="h-4 w-4" />{previewDoc?.name}</DialogTitle>
             <DialogDescription>Preview of extracted document content (first 2000 characters)</DialogDescription>
           </DialogHeader>
           <ScrollArea className="h-96 w-full rounded-md border bg-muted/30 p-4">
             <pre className="text-xs whitespace-pre-wrap font-mono text-foreground">{previewDoc?.content}</pre>
           </ScrollArea>
           <div className="flex justify-end">
-            <Button variant="outline" onClick={() => setPreviewDoc(null)}>
-              <X className="h-4 w-4 mr-2" /> Close
-            </Button>
+            <Button variant="outline" onClick={() => setPreviewDoc(null)}><X className="h-4 w-4 mr-2" /> Close</Button>
           </div>
         </DialogContent>
       </Dialog>

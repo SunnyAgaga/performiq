@@ -100,9 +100,16 @@ The Vite proxy rewrites `/crm/api/*` → `http://localhost:3002/api/*` at dev ti
 - **Settings** — agent/profile settings
 
 ### AI Features
-- `POST /api/ai/suggest-reply` — generates 3 AI reply suggestions for the active conversation (Claude Haiku)
-- `POST /api/ai/auto-respond` — HiraBot auto-replies to the customer as "bot" sender (Claude Haiku)
-- `POST /api/ai/chat` — SSE streaming AI chat for testing (Claude Haiku). Uses `AI_INTEGRATIONS_ANTHROPIC_BASE_URL` + `AI_INTEGRATIONS_ANTHROPIC_API_KEY` (auto-provisioned by Replit AI Integrations)
+- **Provider-agnostic**: Supports Gemini (built-in via Replit integration), Gemini (own key), OpenAI, Anthropic Claude, and Custom OpenAI-compatible endpoints
+- `AiSettings` model (`crm_ai_settings`) stores: provider, model, apiKey (encrypted at rest), baseUrl, temperature, maxTokens
+- `GET /api/ai/settings` — fetch current AI provider settings (returns `hasApiKey` not raw key)
+- `PUT /api/ai/settings` — update provider/model/apiKey/baseUrl/temperature/maxTokens
+- `POST /api/ai/settings/test` — test a provider config before saving (returns `{ok, message}`)
+- `POST /api/ai/suggest-reply` — generates 3 AI reply suggestions for the active conversation
+- `POST /api/ai/auto-respond` — CommsBot auto-replies as "bot" sender
+- `POST /api/ai/chat` — SSE streaming AI chat for testing
+- Provider helper: `crm-backend/src/lib/ai-provider.ts` — `generateText()` and `streamText()` route to the correct SDK based on settings
+- AI Assistant page: 4-tab layout — AI Provider (provider selector + model/key/URL/temp), Knowledge Base, Test Chat, System Prompt
 - Inbox: ⚡ button to get AI suggestions (click to insert); "Bot Reply" button for auto-respond
 
 ### Channel Integrations

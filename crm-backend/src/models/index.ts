@@ -8,6 +8,8 @@ export { ClosedConversation } from "./ClosedConversation.js";
 export { ClosedMessage } from "./ClosedMessage.js";
 export { Feedback } from "./Feedback.js";
 export { KnowledgeDoc } from "./KnowledgeDoc.js";
+export { AiSettings } from "./AiSettings.js";
+export type { AiProvider } from "./AiSettings.js";
 
 import { Agent } from "./Agent.js";
 import { Customer } from "./Customer.js";
