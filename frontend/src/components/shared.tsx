@@ -16,9 +16,13 @@ export function PageHeader({ title, description, action, children }: { title: st
   );
 }
 
-export function Card({ children, className = "" }: { children: ReactNode, className?: string }) {
+export function Card({ children, className = "", onClick, ...rest }: { children: ReactNode, className?: string, onClick?: () => void, [k: string]: any }) {
   return (
-    <div className={`bg-card rounded-2xl border border-border shadow-sm overflow-hidden transition-all duration-200 hover:shadow-md ${className}`}>
+    <div
+      className={`bg-card rounded-2xl border border-border shadow-sm overflow-hidden transition-all duration-200 hover:shadow-md ${className}`}
+      onClick={onClick}
+      {...rest}
+    >
       {children}
     </div>
   );
