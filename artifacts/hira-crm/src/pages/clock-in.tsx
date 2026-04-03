@@ -7,9 +7,11 @@ import {
   MapPin, AlertCircle, Radio, ChevronDown, ChevronUp,
   WifiOff, Wifi, CloudUpload, Camera, RefreshCw, CheckCircle2,
   ZoomIn, ShieldCheck, ShieldAlert, ShieldQuestion, ScanFace, UserCircle2,
+  Activity, MessageSquare, CheckCheck, Hourglass, WifiOff as WifiOffIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -501,6 +503,229 @@ function FaceCell({ log, isManager, onReviewClick }: { log: any; isManager: bool
   );
 }
 
+// ── Activity Status helpers ───────────────────────────────────────────────────
+type ActivityStatus = "active" | "away" | "idle" | "offline" | "clocked-out";
+
+const STATUS_META: Record<ActivityStatus, { label: string; dot: string; badge: string }> = {
+  active:      { label: "Active",      dot: "bg-green-500",  badge: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  away:        { label: "Away",        dot: "bg-yellow-400", badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400" },
+  idle:        { label: "Idle",        dot: "bg-orange-400", badge: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  offline:     { label: "Offline",     dot: "bg-gray-400",   badge: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400" },
+  "clocked-out": { label: "Clocked Out", dot: "bg-blue-400", badge: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+};
+
+function fmtIdleTime(mins: number | null) {
+  if (mins === null) return "No data";
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60); const m = mins % 60;
+  return `${h}h ${m}m ago`;
+}
+
+function AgentStatusCard({ agent }: { agent: any }) {
+  const status: ActivityStatus = agent.activityStatus ?? "offline";
+  const meta = STATUS_META[status];
+  const initials = (agent.name ?? "?").split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase();
+
+  return (
+    <Card className="relative overflow-hidden">
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          {/* Avatar */}
+          <div className="relative shrink-0">
+            {agent.avatar ? (
+              <img src={agent.avatar} alt={agent.name} className="w-10 h-10 rounded-full object-cover" />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground">
+                {initials}
+              </div>
+            )}
+            {/* Status dot */}
+            <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-card ${meta.dot}`} />
+          </div>
+
+          {/* Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-sm font-semibold truncate">{agent.name}</p>
+              <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${meta.badge}`}>
+                {meta.label}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground capitalize">{agent.role}</p>
+
+            {/* Stats row */}
+            <div className="flex items-center gap-3 mt-2 text-xs">
+              {status !== "clocked-out" && (
+                <>
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <MessageSquare className="w-3 h-3" />
+                    {agent.activeConversations ?? 0} open
+                  </span>
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <CheckCheck className="w-3 h-3" />
+                    {agent.resolvedToday ?? 0} resolved
+                  </span>
+                </>
+              )}
+              {status === "clocked-out" && (
+                <span className="text-muted-foreground">
+                  {fmtDuration(agent.durationMinutes)} shift · {agent.resolvedToday ?? 0} resolved
+                </span>
+              )}
+            </div>
+
+            {/* Last active / idle time */}
+            {status !== "clocked-out" && (
+              <div className="mt-1.5 flex items-center gap-1 text-xs">
+                {status === "active" ? (
+                  <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                    <Activity className="w-3 h-3" /> Active now
+                  </span>
+                ) : status === "offline" ? (
+                  <span className="text-muted-foreground flex items-center gap-1">
+                    <WifiOff className="w-3 h-3" /> {fmtIdleTime(agent.idleMinutes)}
+                  </span>
+                ) : (
+                  <span className={`flex items-center gap-1 ${status === "idle" ? "text-orange-500" : "text-yellow-500"}`}>
+                    <Hourglass className="w-3 h-3" /> Idle {fmtIdleTime(agent.idleMinutes)}
+                  </span>
+                )}
+                <span className="text-muted-foreground ml-auto">
+                  In: {fmtTime(agent.clockIn)}
+                  {agent.shiftDurationMinutes != null && ` · ${fmtDuration(agent.shiftDurationMinutes)}`}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Activity Monitor Section (admin/supervisor only) ──────────────────────────
+function ActivityMonitor() {
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["crm-attendance-monitor"],
+    queryFn: () => apiGet<any>("/attendance/monitor"),
+    refetchInterval: 30000,
+  } as Parameters<typeof useQuery>[0]);
+
+  const summary = data?.summary ?? {};
+  const clockedIn: any[] = data?.clockedIn ?? [];
+  const clockedOut: any[] = data?.clockedOut ?? [];
+  const hasAnyone = clockedIn.length > 0 || clockedOut.length > 0;
+
+  const summaryItems = [
+    { label: "Active",      value: summary.active ?? 0,    colour: "text-green-600 dark:text-green-400",   dot: "bg-green-500" },
+    { label: "Away",        value: summary.away ?? 0,      colour: "text-yellow-600 dark:text-yellow-400", dot: "bg-yellow-400" },
+    { label: "Idle",        value: summary.idle ?? 0,      colour: "text-orange-600 dark:text-orange-400", dot: "bg-orange-400" },
+    { label: "Offline",     value: summary.offline ?? 0,   colour: "text-muted-foreground",                dot: "bg-gray-400" },
+    { label: "Clocked Out", value: summary.clockedOut ?? 0,colour: "text-blue-600 dark:text-blue-400",     dot: "bg-blue-400" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Activity className="w-4 h-4 text-primary" />
+          <h2 className="text-base font-semibold">Activity Monitor</h2>
+          {!isLoading && (
+            <span className="text-xs text-muted-foreground">· refreshes every 30s</span>
+          )}
+        </div>
+        <Button variant="ghost" size="sm" className="h-7 gap-1.5 text-xs"
+          onClick={() => qc.invalidateQueries({ queryKey: ["crm-attendance-monitor"] })}>
+          <RefreshCw className="w-3 h-3" /> Refresh
+        </Button>
+      </div>
+
+      {/* Summary pills */}
+      <div className="flex flex-wrap gap-2">
+        {summaryItems.map(item => (
+          <div key={item.label} className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs">
+            <span className={`w-2 h-2 rounded-full ${item.dot}`} />
+            <span className={`font-semibold ${item.colour}`}>{item.value}</span>
+            <span className="text-muted-foreground">{item.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <div className="w-6 h-6 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
+        </div>
+      ) : !hasAnyone ? (
+        <div className="rounded-xl border border-dashed border-border p-8 text-center">
+          <Clock className="w-8 h-8 mx-auto mb-2 text-muted-foreground/40" />
+          <p className="text-sm text-muted-foreground">No agents have clocked in today yet</p>
+        </div>
+      ) : (
+        <>
+          {/* Currently on shift */}
+          {clockedIn.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                On Shift ({clockedIn.length})
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                {clockedIn.map(agent => (
+                  <AgentStatusCard key={agent.logId} agent={agent} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Clocked out today */}
+          {clockedOut.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
+                Clocked Out Today ({clockedOut.length})
+              </p>
+              <div className="rounded-xl border border-border overflow-hidden">
+                <table className="w-full text-sm">
+                  <tbody className="divide-y divide-border">
+                    {clockedOut.map((agent: any) => (
+                      <tr key={agent.logId} className="hover:bg-muted/30 transition-colors">
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2.5">
+                            {agent.avatar ? (
+                              <img src={agent.avatar} alt={agent.name} className="w-7 h-7 rounded-full object-cover shrink-0" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground shrink-0">
+                                {(agent.name ?? "?").split(" ").map((p: string) => p[0]).slice(0, 2).join("").toUpperCase()}
+                              </div>
+                            )}
+                            <span className="font-medium">{agent.name}</span>
+                            <span className="text-xs text-muted-foreground capitalize">{agent.role}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                          {fmtTime(agent.clockIn)} → {fmtTime(agent.clockOut)}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs">{fmtDuration(agent.durationMinutes)}</td>
+                        <td className="px-4 py-2.5 text-xs text-muted-foreground">{agent.resolvedToday} resolved</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${STATUS_META["clocked-out"].badge}`}>
+                            Clocked Out
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ClockIn() {
   const { agent } = useAuth();
@@ -827,6 +1052,13 @@ export default function ClockIn() {
           {today?.clockOut && <p className="text-sm text-muted-foreground italic">Day complete — see you tomorrow!</p>}
         </div>
       </div>
+
+      {/* ── Activity Monitor (admin/supervisor only) ── */}
+      {isManager && (
+        <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+          <ActivityMonitor />
+        </div>
+      )}
 
       {/* ── Filters ── */}
       <div className="flex flex-wrap gap-3 items-center">

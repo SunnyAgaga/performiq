@@ -234,6 +234,115 @@ router.put("/attendance/:id/face-review", requireAuth, async (req: AuthRequest, 
   }
 });
 
+// ── GET /attendance/monitor — live agent activity status ─────────────────────
+router.get("/attendance/monitor", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { role } = req.agent!;
+    if (role === "agent") return res.status(403).json({ error: "Forbidden" });
+
+    const today = new Date().toISOString().split("T")[0];
+    const now = new Date();
+
+    // All agents clocked in today (clock-out not yet done)
+    const activeLogs = await AgentAttendance.findAll({
+      where: {
+        date: today,
+        clockIn: { [Op.ne]: null },
+        clockOut: null,
+      },
+      include: [
+        {
+          model: Agent,
+          as: "agent",
+          attributes: ["id", "name", "email", "avatar", "role", "lastActiveAt", "activeConversations", "resolvedToday"],
+        },
+      ],
+    });
+
+    // All agents with a clock-out today (completed shifts)
+    const completedLogs = await AgentAttendance.findAll({
+      where: {
+        date: today,
+        clockIn: { [Op.ne]: null },
+        clockOut: { [Op.ne]: null },
+      },
+      include: [
+        {
+          model: Agent,
+          as: "agent",
+          attributes: ["id", "name", "email", "avatar", "role", "lastActiveAt", "activeConversations", "resolvedToday"],
+        },
+      ],
+    });
+
+    function toStatus(lastActiveAt: Date | null): "active" | "away" | "idle" | "offline" {
+      if (!lastActiveAt) return "offline";
+      const idleMins = (now.getTime() - new Date(lastActiveAt).getTime()) / 60000;
+      if (idleMins < 5) return "active";
+      if (idleMins < 15) return "away";
+      if (idleMins < 60) return "idle";
+      return "offline";
+    }
+
+    const clockedIn = activeLogs.map((log: any) => {
+      const agent = log.agent;
+      const idleMins = agent?.lastActiveAt
+        ? Math.round((now.getTime() - new Date(agent.lastActiveAt).getTime()) / 60000)
+        : null;
+      return {
+        logId: log.id,
+        agentId: log.agentId,
+        name: agent?.name ?? "Unknown",
+        email: agent?.email ?? "",
+        avatar: agent?.avatar ?? null,
+        role: agent?.role ?? "agent",
+        clockIn: log.clockIn,
+        lastActiveAt: agent?.lastActiveAt ?? null,
+        idleMinutes: idleMins,
+        activityStatus: toStatus(agent?.lastActiveAt ?? null),
+        activeConversations: agent?.activeConversations ?? 0,
+        resolvedToday: agent?.resolvedToday ?? 0,
+        shiftDurationMinutes: log.clockIn
+          ? Math.round((now.getTime() - new Date(log.clockIn).getTime()) / 60000)
+          : 0,
+      };
+    });
+
+    const clockedOut = completedLogs.map((log: any) => {
+      const agent = log.agent;
+      return {
+        logId: log.id,
+        agentId: log.agentId,
+        name: agent?.name ?? "Unknown",
+        email: agent?.email ?? "",
+        avatar: agent?.avatar ?? null,
+        role: agent?.role ?? "agent",
+        clockIn: log.clockIn,
+        clockOut: log.clockOut,
+        durationMinutes: log.durationMinutes,
+        resolvedToday: agent?.resolvedToday ?? 0,
+        activityStatus: "clocked-out" as const,
+      };
+    });
+
+    res.json({
+      clockedIn,
+      clockedOut,
+      summary: {
+        total: clockedIn.length + clockedOut.length,
+        active: clockedIn.filter(a => a.activityStatus === "active").length,
+        away: clockedIn.filter(a => a.activityStatus === "away").length,
+        idle: clockedIn.filter(a => a.activityStatus === "idle").length,
+        offline: clockedIn.filter(a => a.activityStatus === "offline").length,
+        clockedOut: clockedOut.length,
+      },
+    });
+  } catch (err) {
+    console.error("attendance/monitor error:", err);
+    res.status(500).json({ error: "Failed to fetch monitor data" });
+  }
+});
+
 // ── GET /attendance/:id/pings ─────────────────────────────────────────────────
 router.get("/attendance/:id/pings", requireAuth, async (req: AuthRequest, res) => {
   try {

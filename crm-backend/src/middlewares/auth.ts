@@ -4,6 +4,9 @@ import { Agent } from "../models/index.js";
 
 const JWT_SECRET = process.env.JWT_SECRET ?? "crm-secret-fallback";
 
+// Throttle: only write lastActiveAt at most once per 60 seconds per agent
+const lastActiveWritten = new Map<number, number>();
+
 export interface AuthRequest extends Request {
   agent?: {
     id: number;
@@ -28,6 +31,16 @@ export function requireAuth(req: AuthRequest, res: Response, next: NextFunction)
   try {
     const payload = jwt.verify(token, JWT_SECRET) as { id: number; email: string; role: string; name: string };
     req.agent = payload;
+
+    // Fire-and-forget: update lastActiveAt with 60s throttle
+    const agentId = payload.id;
+    const now = Date.now();
+    const lastWrite = lastActiveWritten.get(agentId) ?? 0;
+    if (now - lastWrite > 60_000) {
+      lastActiveWritten.set(agentId, now);
+      Agent.update({ lastActiveAt: new Date() }, { where: { id: agentId } }).catch(() => {});
+    }
+
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });

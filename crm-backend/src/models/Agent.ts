@@ -12,12 +12,13 @@ export interface AgentAttributes {
   activeConversations: number;
   resolvedToday: number;
   rating: number;
+  lastActiveAt: Date | null;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export interface AgentCreationAttributes
-  extends Optional<AgentAttributes, "id" | "avatar" | "isActive" | "activeConversations" | "resolvedToday" | "rating"> {}
+  extends Optional<AgentAttributes, "id" | "avatar" | "isActive" | "activeConversations" | "resolvedToday" | "rating" | "lastActiveAt"> {}
 
 export class Agent extends Model<AgentAttributes, AgentCreationAttributes> implements AgentAttributes {
   declare id: number;
@@ -30,6 +31,7 @@ export class Agent extends Model<AgentAttributes, AgentCreationAttributes> imple
   declare activeConversations: number;
   declare resolvedToday: number;
   declare rating: number;
+  declare lastActiveAt: Date | null;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
 }
@@ -46,6 +48,7 @@ Agent.init(
     activeConversations: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "active_conversations" },
     resolvedToday: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "resolved_today" },
     rating: { type: DataTypes.FLOAT, allowNull: false, defaultValue: 5.0 },
+    lastActiveAt: { type: DataTypes.DATE, allowNull: true, field: "last_active_at" },
   },
   {
     sequelize,
