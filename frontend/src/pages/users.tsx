@@ -1,10 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useListUsers, useCreateUser, useUpdateUser, useDeleteUser } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, Button, Input, Label } from "@/components/shared";
-import { Users as UsersIcon, Plus, Edit, Trash2, X, Search, ChevronDown, AlertCircle } from "lucide-react";
+import { Users as UsersIcon, Plus, Edit, Trash2, X, Search, ChevronDown, AlertCircle, Camera, UserCircle2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { apiFetch } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface Site { id: number; name: string; city?: string | null; country?: string | null; }
 
@@ -14,8 +16,12 @@ const NEW_DEPT_SENTINEL = "__new__";
 
 export default function Users() {
   const { user } = useAuth();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const headers = { Authorization: `Bearer ${localStorage.getItem('token')}` };
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [photoTarget, setPhotoTarget] = useState<{ id: number; name: string; currentPhoto?: string | null } | null>(null);
+  const [photoUploading, setPhotoUploading] = useState(false);
   
   const { data: users, isLoading } = useListUsers({ request: { headers } });
   
@@ -88,6 +94,37 @@ export default function Users() {
         onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/users"] }); setIsDialogOpen(false); setMutationError(null); },
         onError: (err: any) => { setMutationError(err?.data?.error ?? err?.message ?? "Failed to create user. Please try again."); }
       });
+    }
+  };
+
+  const handlePhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !photoTarget) return;
+    setPhotoUploading(true);
+    try {
+      // Compress image to ~400x400 max via canvas
+      const bitmap = await createImageBitmap(file);
+      const maxDim = 400;
+      const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+      const w = Math.round(bitmap.width * scale);
+      const h = Math.round(bitmap.height * scale);
+      const canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d")!.drawImage(bitmap, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      const r = await apiFetch(`/api/users/${photoTarget.id}/profile-photo`, {
+        method: "PUT",
+        body: JSON.stringify({ profilePhoto: dataUrl }),
+      });
+      if (!r.ok) throw new Error("Upload failed");
+      toast({ title: "Reference photo saved", description: `${photoTarget.name}'s reference photo updated.` });
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      setPhotoTarget(null);
+    } catch {
+      toast({ title: "Error", description: "Could not save photo. Please try again.", variant: "destructive" });
+    } finally {
+      setPhotoUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -196,6 +233,16 @@ export default function Users() {
                 </td>
                 <td className="p-4 text-right">
                   <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5"
+                      title="Set reference photo for face review"
+                      onClick={() => setPhotoTarget({ id: u.id, name: u.name, currentPhoto: (u as any).profilePhoto })}
+                    >
+                      <Camera className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Photo</span>
+                    </Button>
                     {(user?.role === 'super_admin' || !['admin','super_admin'].includes(u.role)) && (
                       <Button
                         variant="outline"
@@ -223,6 +270,54 @@ export default function Users() {
           </tbody>
         </table>
       </Card>
+
+      {/* Hidden file input for photo capture */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="user"
+        className="hidden"
+        onChange={handlePhotoFile}
+      />
+
+      {/* Reference Photo Dialog */}
+      <Dialog open={!!photoTarget} onOpenChange={v => { if (!v) setPhotoTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="w-5 h-5" /> Set Reference Photo
+            </DialogTitle>
+            <p className="text-xs text-muted-foreground pt-0.5">
+              This photo will be used to verify identity against attendance selfies for <strong>{photoTarget?.name}</strong>.
+            </p>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-2">
+            {photoTarget?.currentPhoto ? (
+              <div className="flex flex-col items-center gap-1">
+                <img src={photoTarget.currentPhoto} alt="Current reference" className="w-32 h-32 rounded-full object-cover border-2 border-primary/40" />
+                <span className="text-xs text-muted-foreground">Current reference photo</span>
+              </div>
+            ) : (
+              <div className="w-32 h-32 rounded-full border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 bg-muted/30">
+                <UserCircle2 className="w-10 h-10 text-muted-foreground/40" />
+                <span className="text-[11px] text-muted-foreground">No photo yet</span>
+              </div>
+            )}
+            <Button
+              className="w-full gap-2"
+              disabled={photoUploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Camera className="w-4 h-4" />
+              {photoUploading ? "Saving…" : photoTarget?.currentPhoto ? "Replace Photo" : "Take / Upload Photo"}
+            </Button>
+            <p className="text-[11px] text-muted-foreground text-center">
+              On mobile this opens the front camera. On desktop you can select a photo file.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {isDialogOpen && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db, attendanceLogsTable, attendanceLocationPingsTable, usersTable } from "../db/index.js";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth, AuthRequest } from "../middlewares/auth.js";
+import { sql } from "drizzle-orm";
 
 const router = Router();
 
@@ -105,7 +106,7 @@ router.get("/attendance", requireAuth, async (req: AuthRequest, res) => {
 
     const userIds = [...new Set(rows.map(r => r.userId))];
     const users = userIds.length > 0
-      ? await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, department: usersTable.department })
+      ? await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email, department: usersTable.department, profilePhoto: usersTable.profilePhoto })
           .from(usersTable).where(inArray(usersTable.id, userIds))
       : [];
     const userMap = Object.fromEntries(users.map(u => [u.id, u]));
@@ -178,6 +179,31 @@ router.post("/attendance/location-ping/batch", requireAuth, async (req: AuthRequ
     res.json({ saved: results.length });
   } catch (err) {
     res.status(500).json({ error: "Failed to save batch pings" });
+  }
+});
+
+// PUT /attendance/:id/face-review — manager/admin verifies or flags a face photo
+router.put("/attendance/:id/face-review", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { role, id: reviewerId } = req.user!;
+    if (role === "employee") return res.status(403).json({ error: "Forbidden" });
+    const logId = parseInt(req.params.id);
+    const { status } = req.body as { status: "verified" | "flagged" | "pending" };
+    if (!["verified", "flagged", "pending"].includes(status)) {
+      return res.status(400).json({ error: "Invalid status. Use verified, flagged or pending." });
+    }
+    const [updated] = await db.update(attendanceLogsTable)
+      .set({
+        faceReviewStatus: status,
+        faceReviewedBy: reviewerId,
+        faceReviewedAt: new Date(),
+      })
+      .where(eq(attendanceLogsTable.id, logId))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Log not found" });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update face review status" });
   }
 });
 

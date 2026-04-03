@@ -84,6 +84,25 @@ Express 5 API server. Fully self-contained — the DB layer lives at `backend/sr
 - **Drizzle config**: `backend/drizzle.config.ts`
 - `DATABASE_URL` is automatically provided by Replit
 
+## Face Identity Review (Attendance Compliance)
+
+Added to support audit and compliance requirements for shared-device attendance on sites.
+
+**DB additions:**
+- `users.profile_photo TEXT` — reference photo stored as base64 JPEG (~400×400px)
+- `attendance_logs.face_review_status TEXT` — `pending` | `verified` | `flagged` (default: `pending`)
+- `attendance_logs.face_reviewed_by INTEGER` — reviewer's user ID
+- `attendance_logs.face_reviewed_at TIMESTAMP` — when reviewed
+
+**New API endpoints:**
+- `PUT /api/users/:id/profile-photo` — set reference photo (admin or self)
+- `PUT /api/attendance/:id/face-review` — mark a record as verified/flagged/pending (manager+)
+
+**Frontend:**
+- Attendance table: each row shows a `FaceReviewBadge` (Pending/Verified/Flagged) + "Review" button for managers
+- `FaceReviewModal`: 3-column side-by-side comparison — Reference Photo | Clock-In Selfie | Clock-Out Selfie — with Verify, Flag, and Reset actions and full audit trail
+- Users page: "Photo" button on each user row opens a `SetPhotoModal` to take/upload a reference photo (compresses to ~400×400 JPEG)
+
 ## Auth
 
 - JWT stored in `localStorage` as `"token"`

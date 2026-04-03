@@ -24,6 +24,7 @@ export const usersTable = pgTable("users", {
   jobTitle: text("job_title"),
   phone: text("phone"),
   staffId: text("staff_id"),
+  profilePhoto: text("profile_photo"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 

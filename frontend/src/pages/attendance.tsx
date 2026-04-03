@@ -6,6 +6,7 @@ import {
   Clock, LogIn, LogOut, CalendarDays, Users, Timer,
   MapPin, AlertCircle, Radio, ChevronDown, ChevronUp,
   WifiOff, Wifi, CloudUpload, Camera, RefreshCw, CheckCircle2, X, ZoomIn,
+  ShieldCheck, ShieldAlert, ShieldQuestion, ScanFace, UserCircle2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -247,6 +248,165 @@ function FaceThumb({ src, label, photoTime }: { src: string; label: string; phot
   );
 }
 
+// ─── Face Review Status helpers ───────────────────────────────────────────────
+function FaceReviewBadge({ status }: { status?: string | null }) {
+  if (!status || status === "pending") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 font-medium">
+        <ShieldQuestion className="w-3 h-3" /> Pending
+      </span>
+    );
+  }
+  if (status === "verified") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 font-medium">
+        <ShieldCheck className="w-3 h-3" /> Verified
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 font-medium">
+      <ShieldAlert className="w-3 h-3" /> Flagged
+    </span>
+  );
+}
+
+// ─── Face Review Modal ─────────────────────────────────────────────────────────
+interface FaceReviewModalProps {
+  log: any;
+  isManager: boolean;
+  open: boolean;
+  onClose: () => void;
+  onReview: (logId: number, status: "verified" | "flagged" | "pending") => void;
+  reviewing: boolean;
+}
+function FaceReviewModal({ log, isManager, open, onClose, onReview, reviewing }: FaceReviewModalProps) {
+  if (!log) return null;
+  const profilePhoto = log.user?.profilePhoto;
+  const hasAnyPhoto = profilePhoto || log.faceImageIn || log.faceImageOut;
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ScanFace className="w-5 h-5" />
+            Face Identity Review — {log.user?.name ?? "Employee"}
+          </DialogTitle>
+          <p className="text-xs text-muted-foreground pt-1">
+            {new Date(log.date + "T00:00:00").toLocaleDateString([], { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+          </p>
+        </DialogHeader>
+
+        {!hasAnyPhoto && (
+          <div className="text-center py-8 text-muted-foreground">
+            <ScanFace className="w-10 h-10 mx-auto mb-2 opacity-30" />
+            <p className="text-sm">No photos available for this record.</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-4 mt-2">
+          {/* Reference photo */}
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reference Photo</p>
+            {profilePhoto ? (
+              <img src={profilePhoto} alt="Reference" className="w-full aspect-square object-cover rounded-xl border-2 border-primary/40" />
+            ) : (
+              <div className="w-full aspect-square rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 bg-muted/30">
+                <UserCircle2 className="w-10 h-10 text-muted-foreground/40" />
+                <p className="text-[11px] text-muted-foreground text-center px-2">No reference photo set for this user</p>
+              </div>
+            )}
+            <span className="text-[10px] text-muted-foreground">Profile on file</span>
+          </div>
+
+          {/* Clock-in selfie */}
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Clock-In Selfie</p>
+            {log.faceImageIn ? (
+              <img src={log.faceImageIn} alt="Clock-in" className="w-full aspect-square object-cover rounded-xl border-2 border-green-400/50" />
+            ) : (
+              <div className="w-full aspect-square rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted/30">
+                <p className="text-[11px] text-muted-foreground">No clock-in photo</p>
+              </div>
+            )}
+            {log.clockInPhotoTime && (
+              <span className="text-[10px] text-muted-foreground">
+                {new Date(log.clockInPhotoTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+            )}
+          </div>
+
+          {/* Clock-out selfie */}
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Clock-Out Selfie</p>
+            {log.faceImageOut ? (
+              <img src={log.faceImageOut} alt="Clock-out" className="w-full aspect-square object-cover rounded-xl border-2 border-orange-400/50" />
+            ) : (
+              <div className="w-full aspect-square rounded-xl border-2 border-dashed border-border flex items-center justify-center bg-muted/30">
+                <p className="text-[11px] text-muted-foreground">No clock-out photo</p>
+              </div>
+            )}
+            {log.clockOutPhotoTime && (
+              <span className="text-[10px] text-muted-foreground">
+                {new Date(log.clockOutPhotoTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Current review status */}
+        <div className="flex items-center justify-between bg-muted/40 rounded-lg px-3 py-2 mt-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Review Status:</span>
+            <FaceReviewBadge status={log.faceReviewStatus} />
+          </div>
+          {log.faceReviewedAt && (
+            <span className="text-[10px] text-muted-foreground">
+              Reviewed {new Date(log.faceReviewedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+            </span>
+          )}
+        </div>
+
+        {/* Action buttons — managers/admins only */}
+        {isManager && (
+          <div className="flex gap-2 mt-1">
+            <Button
+              size="sm"
+              className="flex-1 bg-green-600 hover:bg-green-700 text-white gap-1.5"
+              disabled={reviewing || log.faceReviewStatus === "verified"}
+              onClick={() => onReview(log.id, "verified")}
+            >
+              <ShieldCheck className="w-4 h-4" />
+              {reviewing ? "Saving…" : "Verify — Photos Match"}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              className="flex-1 gap-1.5"
+              disabled={reviewing || log.faceReviewStatus === "flagged"}
+              onClick={() => onReview(log.id, "flagged")}
+            >
+              <ShieldAlert className="w-4 h-4" />
+              {reviewing ? "Saving…" : "Flag — Suspicious"}
+            </Button>
+            {log.faceReviewStatus !== "pending" && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={reviewing}
+                onClick={() => onReview(log.id, "pending")}
+                title="Reset to pending"
+              >
+                <RefreshCw className="w-4 h-4" />
+              </Button>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function StatusBadge({ log }: { log: any }) {
   if (!log) return <Badge variant="outline">Not clocked in</Badge>;
@@ -323,12 +483,13 @@ function LocationCell({ log }: { log: any }) {
   );
 }
 
-function FaceCell({ log }: { log: any }) {
+function FaceCell({ log, isManager, onReviewClick }: { log: any; isManager: boolean; onReviewClick?: (log: any) => void }) {
   const fmtPhotoTime = (t: string | null | undefined) =>
     t ? new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
 
   return (
-    <div className="flex items-start gap-3">
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-start gap-3">
       {log.faceImageIn
         ? <div className="flex flex-col items-center gap-0.5">
             <FaceThumb src={log.faceImageIn} label="Clock-in photo" photoTime={log.clockInPhotoTime} />
@@ -357,6 +518,18 @@ function FaceCell({ log }: { log: any }) {
               </div>
             </div>
           : null}
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <FaceReviewBadge status={log.faceReviewStatus} />
+        {isManager && (
+          <button
+            onClick={() => onReviewClick?.(log)}
+            className="text-[10px] flex items-center gap-0.5 text-primary hover:underline"
+          >
+            <ScanFace className="w-3 h-3" /> Review
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -375,6 +548,9 @@ export default function Attendance() {
   // Camera capture state
   const [captureOpen, setCaptureOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<"clock-in" | "clock-out" | null>(null);
+
+  // Face review modal state
+  const [reviewLog, setReviewLog] = useState<any>(null);
 
   // Ping / online state
   const [pingCount, setPingCount] = useState(0);
@@ -509,6 +685,27 @@ export default function Attendance() {
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
+
+  const faceReviewMutation = useMutation({
+    mutationFn: async ({ logId, status }: { logId: number; status: "verified" | "flagged" | "pending" }) => {
+      return apiFetch(`/api/attendance/${logId}/face-review`, {
+        method: "PUT",
+        body: JSON.stringify({ status }),
+      });
+    },
+    onSuccess: (_, { status }) => {
+      qc.invalidateQueries({ queryKey: ["attendance"] });
+      const labels = { verified: "Verified — record marked as confirmed.", flagged: "Flagged — record marked for follow-up.", pending: "Reset to pending review." };
+      toast({ title: "Review saved", description: labels[status] });
+      // Update the reviewLog in-place so modal reflects change immediately
+      setReviewLog((prev: any) => prev ? { ...prev, faceReviewStatus: status, faceReviewedAt: new Date().toISOString() } : null);
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const handleFaceReview = (logId: number, status: "verified" | "flagged" | "pending") => {
+    faceReviewMutation.mutate({ logId, status });
+  };
 
   // User clicks the main button → open camera
   const handleClockAction = () => {
@@ -726,7 +923,7 @@ export default function Attendance() {
                   <td className="px-4 py-3">{fmtTime(log.clockIn)}</td>
                   <td className="px-4 py-3">{fmtTime(log.clockOut)}</td>
                   <td className="px-4 py-3">{fmtDuration(log.durationMinutes)}</td>
-                  <td className="px-4 py-3"><FaceCell log={log} /></td>
+                  <td className="px-4 py-3"><FaceCell log={log} isManager={isManager} onReviewClick={setReviewLog} /></td>
                   <td className="px-4 py-3"><LocationCell log={log} /></td>
                   <td className="px-4 py-3"><StatusBadge log={log} /></td>
                 </tr>
@@ -742,6 +939,16 @@ export default function Attendance() {
         action={pendingAction ?? "clock-in"}
         onConfirm={handleFaceConfirm}
         onCancel={() => { setCaptureOpen(false); setPendingAction(null); }}
+      />
+
+      {/* Face Review Modal */}
+      <FaceReviewModal
+        log={reviewLog}
+        isManager={isManager}
+        open={!!reviewLog}
+        onClose={() => setReviewLog(null)}
+        onReview={handleFaceReview}
+        reviewing={faceReviewMutation.isPending}
       />
     </div>
   );

@@ -135,6 +135,28 @@ router.put("/users/:id", requireAuth, requireRole("admin"), async (req: AuthRequ
   }
 });
 
+// PUT /users/:id/profile-photo — admin or the user themselves sets a reference profile photo
+router.put("/users/:id/profile-photo", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { role, id: actorId } = req.user!;
+    const targetId = Number(req.params.id);
+    // Admins/managers can set anyone's photo; employees can only set their own
+    if (role === "employee" && actorId !== targetId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+    const { profilePhoto } = req.body as { profilePhoto: string };
+    if (!profilePhoto) return res.status(400).json({ error: "profilePhoto is required" });
+    const [updated] = await db.update(usersTable)
+      .set({ profilePhoto })
+      .where(eq(usersTable.id, targetId))
+      .returning({ id: usersTable.id, name: usersTable.name, profilePhoto: usersTable.profilePhoto });
+    if (!updated) return res.status(404).json({ error: "User not found" });
+    res.json(updated);
+  } catch {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
 router.delete("/users/:id", requireAuth, requireRole("admin"), async (req: AuthRequest, res) => {
   try {
     if (Number(req.params.id) === req.user!.id) {

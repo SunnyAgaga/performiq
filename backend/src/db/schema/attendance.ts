@@ -18,6 +18,9 @@ export const attendanceLogsTable = pgTable("attendance_logs", {
   clockInPhotoTime: timestamp("clock_in_photo_time"),
   clockOutPhotoTime: timestamp("clock_out_photo_time"),
   notes: text("notes"),
+  faceReviewStatus: text("face_review_status").default("pending"),
+  faceReviewedBy: integer("face_reviewed_by"),
+  faceReviewedAt: timestamp("face_reviewed_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
