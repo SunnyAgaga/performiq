@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 
-const JWT_SECRET = process.env.JWT_SECRET || "performiq-secret-key-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error("JWT_SECRET environment variable is not set. Server cannot start without it.");
+}
 
 export interface AuthRequest extends Request {
   user?: { id: number; role: string; email: string; customRoleName?: string | null };
