@@ -15,7 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   Search, MoreVertical, Send, CheckCircle, Paperclip, Smile,
   UserPlus, MessageSquare, Loader2, Sparkles, Bot, Zap, RefreshCw,
-  ChevronUp, Lock, AlertTriangle, Archive, Clock, CalendarClock, ListOrdered
+  ChevronUp, Lock, AlertTriangle, Archive, Clock, CalendarClock, ListOrdered,
+  BrainCircuit, X, BookOpen, CornerDownLeft
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -90,6 +91,11 @@ export default function Inbox() {
   const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
   const [followUpDate, setFollowUpDate] = useState(new Date(Date.now() + 86400000).toISOString().slice(0, 16));
   const [followUpNote, setFollowUpNote] = useState("");
+  const [showAssistPanel, setShowAssistPanel] = useState(false);
+  const [assistQuestion, setAssistQuestion] = useState("");
+  const [assistLoading, setAssistLoading] = useState(false);
+  const [assistMessages, setAssistMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const assistEndRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const convParams = new URLSearchParams();
@@ -267,6 +273,26 @@ export default function Inbox() {
       setIsAutoResponding(false);
     }
   };
+
+  const handleAgentAssist = async (question?: string) => {
+    const q = (question ?? assistQuestion).trim();
+    if (!q) return;
+    setAssistQuestion("");
+    setAssistMessages((prev) => [...prev, { role: "user", content: q }]);
+    setAssistLoading(true);
+    try {
+      const data: { answer: string } = await apiPost("/ai/agent-assist", { question: q, conversationId: selectedId ?? undefined });
+      setAssistMessages((prev) => [...prev, { role: "assistant", content: data.answer }]);
+    } catch {
+      setAssistMessages((prev) => [...prev, { role: "assistant", content: "Unable to get an answer. Please check that an AI provider is configured in Settings." }]);
+    } finally {
+      setAssistLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    assistEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [assistMessages, assistLoading]);
 
   const handleCloseConversation = () => {
     if (!selectedId) return;
@@ -647,7 +673,8 @@ export default function Inbox() {
 
       {/* Right Panel */}
       {(tab === "active" || tab === "queue") && selectedConv ? (
-        <div className="flex-1 flex flex-col bg-background min-w-0">
+        <div className="flex-1 flex min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col bg-background min-w-0 overflow-hidden">
           {/* Lock Conflict Warning */}
           {lockConflict && (
             <Alert className="m-4 mb-0 border-amber-200 bg-amber-50 dark:bg-amber-950/20">
@@ -707,6 +734,22 @@ export default function Inbox() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>CommsBot auto-responds to customer</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showAssistPanel ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowAssistPanel((v) => !v)}
+                    className={showAssistPanel ? "gap-2 bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600" : "gap-2 text-emerald-700 border-emerald-200 hover:bg-emerald-50 dark:text-emerald-400 dark:border-emerald-900 dark:hover:bg-emerald-950"}
+                    data-testid="button-ai-assist"
+                  >
+                    <BrainCircuit className="h-4 w-4" />
+                    AI Assist
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Ask AI about SOPs, FAQs & company knowledge</TooltipContent>
               </Tooltip>
 
               <Select
@@ -945,6 +988,123 @@ export default function Inbox() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* AI Assist Side Panel */}
+        {showAssistPanel && (
+          <div className="w-80 border-l flex flex-col bg-background shrink-0">
+            {/* Panel header */}
+            <div className="h-14 border-b flex items-center justify-between px-4 shrink-0 bg-emerald-50/60 dark:bg-emerald-950/20">
+              <div className="flex items-center gap-2">
+                <BrainCircuit className="h-4 w-4 text-emerald-600" />
+                <span className="font-semibold text-sm text-emerald-800 dark:text-emerald-300">AI Assist</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-medium">Knowledge Base</span>
+              </div>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setShowAssistPanel(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Messages area */}
+            <div className="flex-1 overflow-y-auto p-3 space-y-3">
+              {assistMessages.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full text-center gap-3 py-6">
+                  <div className="h-12 w-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                    <BookOpen className="h-6 w-6 text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Your Knowledge Guide</p>
+                    <p className="text-xs text-muted-foreground mt-1">Ask anything about company policies, SOPs, FAQs, or procedures.</p>
+                  </div>
+                  <div className="w-full space-y-1.5 mt-2">
+                    <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Quick questions</p>
+                    {[
+                      "What is our refund policy?",
+                      "How do I escalate a complaint?",
+                      "What are our SLA response times?",
+                      "How to handle an angry customer?",
+                      "What are the steps to verify identity?",
+                    ].map((q) => (
+                      <button
+                        key={q}
+                        onClick={() => handleAgentAssist(q)}
+                        className="w-full text-left text-xs px-3 py-2 rounded-lg border border-border hover:border-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors text-foreground/80 hover:text-foreground"
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {assistMessages.map((msg, i) => (
+                <div key={i} className={`flex gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  {msg.role === "assistant" && (
+                    <div className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                      <BrainCircuit className="h-3.5 w-3.5 text-emerald-600" />
+                    </div>
+                  )}
+                  <div className={`max-w-[85%] rounded-xl px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                    msg.role === "user"
+                      ? "bg-emerald-600 text-white rounded-br-sm"
+                      : "bg-muted text-foreground rounded-bl-sm"
+                  }`}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+
+              {assistLoading && (
+                <div className="flex gap-2 justify-start">
+                  <div className="h-6 w-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                    <BrainCircuit className="h-3.5 w-3.5 text-emerald-600" />
+                  </div>
+                  <div className="bg-muted rounded-xl rounded-bl-sm px-3 py-2">
+                    <div className="flex gap-1 items-center">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.3s]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce [animation-delay:-0.15s]" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce" />
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div ref={assistEndRef} />
+            </div>
+
+            {/* Input area */}
+            <div className="p-3 border-t shrink-0">
+              {assistMessages.length > 0 && (
+                <button
+                  onClick={() => setAssistMessages([])}
+                  className="w-full text-[11px] text-muted-foreground hover:text-foreground mb-2 text-center transition-colors"
+                >
+                  Clear conversation
+                </button>
+              )}
+              <div className="flex gap-2 items-end">
+                <textarea
+                  value={assistQuestion}
+                  onChange={(e) => setAssistQuestion(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAgentAssist(); } }}
+                  placeholder="Ask about policies, FAQs, SOPs…"
+                  rows={2}
+                  className="flex-1 text-xs resize-none rounded-lg border border-input bg-background px-3 py-2 focus:outline-none focus:ring-1 focus:ring-emerald-400 placeholder:text-muted-foreground/50"
+                  disabled={assistLoading}
+                />
+                <Button
+                  size="icon"
+                  onClick={() => handleAgentAssist()}
+                  disabled={!assistQuestion.trim() || assistLoading}
+                  className="h-9 w-9 shrink-0 bg-emerald-600 hover:bg-emerald-700"
+                  data-testid="button-assist-send"
+                >
+                  {assistLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CornerDownLeft className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground/50 mt-1.5 text-center">Answers based on uploaded knowledge docs</p>
+            </div>
+          </div>
+        )}
         </div>
       ) : tab === "closed" && selectedClosed ? (
         /* Closed Conversation Thread */
