@@ -62,6 +62,40 @@ router.get("/timesheets/current", requireAuth, async (req: AuthRequest, res) => 
   }
 });
 
+// GET /timesheets/week?date=YYYY-MM-DD — get or create timesheet for the week containing date
+router.get("/timesheets/week", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user!.id;
+    const dateParam = typeof req.query.date === "string" ? req.query.date : null;
+    const targetDate = dateParam ? new Date(dateParam + "T00:00:00") : new Date();
+
+    // Enforce 3-month lookback limit
+    const limitDate = new Date();
+    limitDate.setMonth(limitDate.getMonth() - 3);
+    limitDate.setDate(1); // start of that month
+    if (targetDate < limitDate) {
+      res.status(400).json({ error: "Cannot access timesheets older than 3 months" }); return;
+    }
+    // No future weeks
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    if (targetDate > tomorrow) {
+      res.status(400).json({ error: "Cannot access future timesheets" }); return;
+    }
+
+    const { weekStart, weekEnd } = getWeekBounds(targetDate);
+    let [sheet] = await db.select().from(timesheetsTable)
+      .where(and(eq(timesheetsTable.userId, userId), eq(timesheetsTable.weekStart, weekStart)));
+    if (!sheet) {
+      [sheet] = await db.insert(timesheetsTable).values({ userId, weekStart, weekEnd, totalMinutes: 0 }).returning();
+    }
+    const entries = await db.select().from(timesheetEntriesTable).where(eq(timesheetEntriesTable.timesheetId, sheet.id));
+    res.json({ ...sheet, entries });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch timesheet for week" });
+  }
+});
+
 // GET /timesheets/:id — get timesheet with entries
 router.get("/timesheets/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
