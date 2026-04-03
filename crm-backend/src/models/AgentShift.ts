@@ -9,13 +9,14 @@ export interface AgentShiftAttributes {
   endTime: string;
   daysOfWeek: string;
   graceMinutes: number;
+  timezone: string;
   isActive: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export interface AgentShiftCreationAttributes
-  extends Optional<AgentShiftAttributes, "id" | "graceMinutes" | "isActive"> {}
+  extends Optional<AgentShiftAttributes, "id" | "graceMinutes" | "timezone" | "isActive"> {}
 
 export class AgentShift
   extends Model<AgentShiftAttributes, AgentShiftCreationAttributes>
@@ -28,6 +29,7 @@ export class AgentShift
   declare endTime: string;
   declare daysOfWeek: string;
   declare graceMinutes: number;
+  declare timezone: string;
   declare isActive: boolean;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -47,6 +49,7 @@ AgentShift.init(
     endTime: { type: DataTypes.STRING(5), allowNull: false, field: "end_time" },
     daysOfWeek: { type: DataTypes.TEXT, allowNull: false, defaultValue: "[1,2,3,4,5]", field: "days_of_week" },
     graceMinutes: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 15, field: "grace_minutes" },
+    timezone: { type: DataTypes.STRING(60), allowNull: false, defaultValue: "UTC", field: "timezone" },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true, field: "is_active" },
   },
   {

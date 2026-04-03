@@ -738,6 +738,48 @@ function TimePicker({ value, onChange, label }: { value: string; onChange: (v: s
 // ── Shift Schedules (admin/supervisor only) ────────────────────────────────────
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// Common IANA timezone list grouped for the select
+const TIMEZONES = [
+  { label: "UTC (Coordinated Universal Time)",           value: "UTC" },
+  { label: "Africa/Lagos (WAT, UTC+1)",                  value: "Africa/Lagos" },
+  { label: "Africa/Nairobi (EAT, UTC+3)",               value: "Africa/Nairobi" },
+  { label: "Africa/Johannesburg (SAST, UTC+2)",          value: "Africa/Johannesburg" },
+  { label: "Africa/Cairo (EET, UTC+2)",                  value: "Africa/Cairo" },
+  { label: "Africa/Accra (GMT, UTC+0)",                  value: "Africa/Accra" },
+  { label: "America/New_York (ET, UTC−5/−4)",            value: "America/New_York" },
+  { label: "America/Chicago (CT, UTC−6/−5)",             value: "America/Chicago" },
+  { label: "America/Denver (MT, UTC−7/−6)",              value: "America/Denver" },
+  { label: "America/Los_Angeles (PT, UTC−8/−7)",         value: "America/Los_Angeles" },
+  { label: "America/Sao_Paulo (BRT, UTC−3)",             value: "America/Sao_Paulo" },
+  { label: "America/Toronto (ET, UTC−5/−4)",             value: "America/Toronto" },
+  { label: "America/Mexico_City (CST, UTC−6/−5)",        value: "America/Mexico_City" },
+  { label: "Europe/London (GMT/BST, UTC+0/+1)",          value: "Europe/London" },
+  { label: "Europe/Paris (CET, UTC+1/+2)",               value: "Europe/Paris" },
+  { label: "Europe/Berlin (CET, UTC+1/+2)",              value: "Europe/Berlin" },
+  { label: "Europe/Moscow (MSK, UTC+3)",                 value: "Europe/Moscow" },
+  { label: "Europe/Istanbul (TRT, UTC+3)",               value: "Europe/Istanbul" },
+  { label: "Asia/Dubai (GST, UTC+4)",                    value: "Asia/Dubai" },
+  { label: "Asia/Karachi (PKT, UTC+5)",                  value: "Asia/Karachi" },
+  { label: "Asia/Kolkata (IST, UTC+5:30)",               value: "Asia/Kolkata" },
+  { label: "Asia/Dhaka (BST, UTC+6)",                    value: "Asia/Dhaka" },
+  { label: "Asia/Bangkok (ICT, UTC+7)",                  value: "Asia/Bangkok" },
+  { label: "Asia/Singapore (SGT, UTC+8)",                value: "Asia/Singapore" },
+  { label: "Asia/Tokyo (JST, UTC+9)",                    value: "Asia/Tokyo" },
+  { label: "Asia/Seoul (KST, UTC+9)",                    value: "Asia/Seoul" },
+  { label: "Asia/Shanghai (CST, UTC+8)",                 value: "Asia/Shanghai" },
+  { label: "Asia/Riyadh (AST, UTC+3)",                   value: "Asia/Riyadh" },
+  { label: "Australia/Sydney (AEST, UTC+10/+11)",        value: "Australia/Sydney" },
+  { label: "Australia/Melbourne (AEST, UTC+10/+11)",     value: "Australia/Melbourne" },
+  { label: "Pacific/Auckland (NZST, UTC+12/+13)",        value: "Pacific/Auckland" },
+];
+
+// Shift presets
+const SHIFT_PRESETS = [
+  { label: "☀️ Morning",   name: "Morning Shift",   start: "06:00", end: "14:00", days: [1,2,3,4,5], emoji: "text-yellow-600 dark:text-yellow-400" },
+  { label: "🌤 Afternoon", name: "Afternoon Shift", start: "14:00", end: "22:00", days: [1,2,3,4,5], emoji: "text-orange-500 dark:text-orange-400" },
+  { label: "🌙 Night",     name: "Night Shift",     start: "22:00", end: "06:00", days: [0,1,2,3,4,5,6], emoji: "text-indigo-600 dark:text-indigo-400" },
+];
+
 function ShiftSchedules({ agents }: { agents: any[] }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -749,8 +791,9 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
     shiftName: "",
     startTime: "09:00",
     endTime: "17:00",
-    daysOfWeek: [1, 2, 3, 4, 5],
+    daysOfWeek: [1, 2, 3, 4, 5] as number[],
     graceMinutes: 15,
+    timezone: "UTC",
   });
 
   const { data: shifts = [], isLoading } = useQuery({
@@ -759,7 +802,7 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
   } as Parameters<typeof useQuery>[0]);
 
   const resetForm = () => {
-    setForm({ agentId: "", shiftName: "", startTime: "09:00", endTime: "17:00", daysOfWeek: [1, 2, 3, 4, 5], graceMinutes: 15 });
+    setForm({ agentId: "", shiftName: "", startTime: "09:00", endTime: "17:00", daysOfWeek: [1, 2, 3, 4, 5], graceMinutes: 15, timezone: "UTC" });
     setEditShift(null);
     setShowForm(false);
   };
@@ -793,8 +836,13 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
       endTime: shift.endTime,
       daysOfWeek: days,
       graceMinutes: shift.graceMinutes,
+      timezone: shift.timezone ?? "UTC",
     });
     setShowForm(true);
+  };
+
+  const applyPreset = (preset: typeof SHIFT_PRESETS[0]) => {
+    setForm(f => ({ ...f, shiftName: preset.name, startTime: preset.start, endTime: preset.end, daysOfWeek: preset.days }));
   };
 
   const toggleDay = (d: number) => {
@@ -814,6 +862,14 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
   };
 
   const isBusy = createMutation.isPending || updateMutation.isPending;
+
+  // Friendly timezone short label for the table
+  const tzShort = (tz: string) => {
+    const match = TIMEZONES.find(t => t.value === tz);
+    if (!match) return tz;
+    const paren = match.label.match(/\(([^)]+)\)/);
+    return paren ? paren[1].split(",")[0] : tz;
+  };
 
   return (
     <div className="space-y-4">
@@ -846,6 +902,7 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Agent</th>
                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Shift</th>
                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Hours</th>
+                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Timezone</th>
                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Days</th>
                 <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Grace</th>
                 <th className="px-4 py-2.5" />
@@ -860,6 +917,7 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
                     <td className="px-4 py-2.5 font-medium">{s.agent?.name ?? "—"}</td>
                     <td className="px-4 py-2.5">{s.shiftName}</td>
                     <td className="px-4 py-2.5 font-mono text-xs">{s.startTime} – {s.endTime}</td>
+                    <td className="px-4 py-2.5 text-xs text-muted-foreground">{tzShort(s.timezone ?? "UTC")}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex gap-0.5">
                         {DAYS.map((d, i) => (
@@ -887,16 +945,38 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
         </div>
       )}
 
-      {/* Add / Edit form */}
+      {/* Add / Edit dialog */}
       <Dialog open={showForm} onOpenChange={(o) => { if (!o) resetForm(); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <CalendarClock className="w-4 h-4" />
               {editShift ? "Edit Shift" : "Add Shift Schedule"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-1">
+
+          <div className="space-y-5 py-1">
+            {/* ── Presets ── */}
+            {!editShift && (
+              <div>
+                <Label className="text-sm mb-2 block text-muted-foreground">Quick Presets</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {SHIFT_PRESETS.map(p => (
+                    <button key={p.name} type="button" onClick={() => applyPreset(p)}
+                      className={`flex flex-col items-center gap-1 rounded-xl border-2 py-3 px-2 transition-all hover:shadow-sm
+                        ${form.shiftName === p.name
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/40 bg-background"}`}>
+                      <span className="text-xl leading-none">{p.label.split(" ")[0]}</span>
+                      <span className="text-xs font-semibold text-center leading-tight">{p.label.split(" ").slice(1).join(" ")}</span>
+                      <span className="font-mono text-[10px] text-muted-foreground">{p.start}–{p.end}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Agent ── */}
             <div>
               <Label className="text-sm mb-1.5 block">Agent</Label>
               <Select value={form.agentId} onValueChange={v => setForm(f => ({ ...f, agentId: v }))}>
@@ -908,10 +988,15 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* ── Shift name ── */}
             <div>
               <Label className="text-sm mb-1.5 block">Shift Name</Label>
-              <Input placeholder="e.g. Morning Shift" value={form.shiftName} onChange={e => setForm(f => ({ ...f, shiftName: e.target.value }))} />
+              <Input placeholder="e.g. Morning Shift" value={form.shiftName}
+                onChange={e => setForm(f => ({ ...f, shiftName: e.target.value }))} />
             </div>
+
+            {/* ── Times ── */}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-sm mb-1.5 block">Start Time</Label>
@@ -922,15 +1007,33 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
                 <TimePicker value={form.endTime} onChange={v => setForm(f => ({ ...f, endTime: v }))} label="end" />
               </div>
             </div>
+
+            {/* ── Timezone ── */}
+            <div>
+              <Label className="text-sm mb-1.5 block">Timezone</Label>
+              <Select value={form.timezone} onValueChange={v => setForm(f => ({ ...f, timezone: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select timezone…" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {TIMEZONES.map(tz => (
+                    <SelectItem key={tz.value} value={tz.value}>
+                      <span className="text-sm">{tz.label}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ── Days ── */}
             <div>
               <Label className="text-sm mb-2 block">Working Days</Label>
               <div className="flex gap-1.5 flex-wrap">
                 {DAYS.map((d, i) => (
-                  <button key={d} type="button"
-                    onClick={() => toggleDay(i)}
-                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors border ${
+                  <button key={d} type="button" onClick={() => toggleDay(i)}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
                       form.daysOfWeek.includes(i)
-                        ? "bg-primary text-primary-foreground border-primary"
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
                         : "bg-background text-muted-foreground border-border hover:border-primary/50"
                     }`}>
                     {d}
@@ -938,13 +1041,16 @@ function ShiftSchedules({ agents }: { agents: any[] }) {
                 ))}
               </div>
             </div>
+
+            {/* ── Grace ── */}
             <div>
               <Label className="text-sm mb-1.5 block">Grace Period (minutes)</Label>
               <Input type="number" min={0} max={60} value={form.graceMinutes}
                 onChange={e => setForm(f => ({ ...f, graceMinutes: parseInt(e.target.value) || 0 }))} />
-              <p className="text-[11px] text-muted-foreground mt-1">How many minutes late is still counted as "on time"</p>
+              <p className="text-[11px] text-muted-foreground mt-1">How many minutes late still counts as "on time"</p>
             </div>
           </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={resetForm}>Cancel</Button>
             <Button onClick={handleSubmit} disabled={isBusy} className="gap-1.5">
