@@ -292,245 +292,239 @@ export default function Inbox() {
   const isLockedByOther = selectedConv?.isLocked && selectedConv.lockedByAgentId !== agent?.id;
 
   return (
-    <div className="flex h-full bg-background overflow-hidden">
-      {/* Left Panel */}
-      <div className="w-[380px] border-r flex flex-col bg-card shrink-0">
-        <div className="p-4 border-b flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-lg">Inbox</h2>
+    <div className="flex h-full overflow-hidden bg-background">
+      {/* Left Panel — Slack-style dark sidebar */}
+      <div className="w-[300px] flex flex-col shrink-0" style={{ backgroundColor: '#3F0E40' }}>
+
+        {/* Sidebar header */}
+        <div className="px-4 pt-4 pb-3 border-b border-white/10">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-white font-bold text-[15px] leading-tight">CommsCRM</span>
+              <span className="text-white/40 text-xs">▾</span>
+            </div>
             <Tabs value={tab} onValueChange={(v) => { setTab(v as InboxTab); setSelectedId(null); setSelectedClosedId(null); setChannelFilter("all"); }}>
-              <TabsList className="h-7">
-                <TabsTrigger value="active" className="text-xs h-6 px-2">Active</TabsTrigger>
-                <TabsTrigger value="closed" className="text-xs h-6 px-2 gap-1">
-                  <Archive className="h-3 w-3" /> Closed
+              <TabsList className="h-6 bg-white/15 gap-0 p-0.5">
+                <TabsTrigger value="active" className="text-[11px] h-5 px-2 text-white/70 data-[state=active]:bg-white/20 data-[state=active]:text-white rounded">Active</TabsTrigger>
+                <TabsTrigger value="closed" className="text-[11px] h-5 px-2 text-white/70 data-[state=active]:bg-white/20 data-[state=active]:text-white rounded gap-1">
+                  <Archive className="h-2.5 w-2.5" /> Closed
                 </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
 
-          {/* Channel filter tabs */}
-          {tab === "active" && (() => {
-            const WhatsAppIcon = getChannelIcon("whatsapp");
-            const FacebookIcon = getChannelIcon("facebook");
-            const InstagramIcon = getChannelIcon("instagram");
-            const channels = [
-              { key: "all", label: "All", icon: null },
-              { key: "whatsapp", label: "WhatsApp", icon: WhatsAppIcon, color: "text-green-500" },
-              { key: "facebook", label: "Facebook", icon: FacebookIcon, color: "text-blue-600" },
-              { key: "instagram", label: "Instagram", icon: InstagramIcon, color: "text-pink-500" },
-            ];
-            return (
-              <div className="flex gap-1">
-                {channels.map((ch) => (
-                  <button
-                    key={ch.key}
-                    onClick={() => setChannelFilter(ch.key)}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
-                      channelFilter === ch.key
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {ch.icon ? <ch.icon className={`h-3 w-3 ${channelFilter === ch.key ? "text-primary-foreground" : ch.color}`} /> : null}
-                    {ch.label}
-                  </button>
-                ))}
-              </div>
-            );
-          })()}
-
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search..."
-                className="pl-9 bg-muted/50 border-none"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                data-testid="input-search-inbox"
-              />
-            </div>
-            {tab === "active" && (
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="w-[100px] bg-muted/50 border-none" data-testid="select-filter-status">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                </SelectContent>
-              </Select>
-            )}
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-white/50" />
+            <input
+              placeholder="Search conversations…"
+              className="w-full bg-white/10 text-white placeholder-white/40 text-xs rounded-md pl-8 pr-3 py-1.5 border border-white/10 outline-none focus:bg-white/20 focus:border-white/20 transition-colors"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              data-testid="input-search-inbox"
+            />
           </div>
         </div>
 
+        {/* Channel filter + status filter */}
+        {tab === "active" && (() => {
+          const WhatsAppIcon = getChannelIcon("whatsapp");
+          const FacebookIcon = getChannelIcon("facebook");
+          const InstagramIcon = getChannelIcon("instagram");
+          const channels = [
+            { key: "all", label: "All" },
+            { key: "whatsapp", label: "WA", icon: WhatsAppIcon },
+            { key: "facebook", label: "FB", icon: FacebookIcon },
+            { key: "instagram", label: "IG", icon: InstagramIcon },
+          ];
+          return (
+            <div className="px-3 pt-3 pb-2 flex items-center gap-1.5 flex-wrap">
+              {channels.map((ch) => (
+                <button
+                  key={ch.key}
+                  onClick={() => setChannelFilter(ch.key)}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                    channelFilter === ch.key
+                      ? "bg-white/25 text-white"
+                      : "text-white/50 hover:bg-white/10 hover:text-white/80"
+                  }`}
+                >
+                  {ch.icon ? <ch.icon className="h-2.5 w-2.5" /> : null}
+                  {ch.label}
+                </button>
+              ))}
+              <div className="ml-auto">
+                <Select value={filter} onValueChange={setFilter}>
+                  <SelectTrigger className="h-5 text-[11px] bg-transparent border-white/20 text-white/60 w-[80px] focus:ring-0 px-2" data-testid="select-filter-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Section label */}
+        <div className="px-4 pt-2 pb-1">
+          <span className="text-white/40 text-[11px] font-semibold uppercase tracking-wider">
+            {tab === "active" ? "Direct Messages" : "Archived"}
+          </span>
+        </div>
+
         <ScrollArea className="flex-1">
-          <div className="divide-y">
-            {/* Active Conversations */}
-            {tab === "active" && (
-              <>
-                {convLoading && <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
-                {conversations.map((conv) => {
-                  const Icon = getChannelIcon(conv.channel);
-                  const isSelected = conv.id === selectedId;
-                  const lockedByOther = conv.isLocked && conv.lockedByAgentId !== agent?.id;
-                  const hasUnread = conv.unreadCount > 0;
-                  const isLive = conv.status === "open" && hasUnread;
-                  const lastMsgPreview = conv.lastMessage
-                    ? (conv.lastMessage.sender === "agent" ? `You: ${conv.lastMessage.content}` : conv.lastMessage.sender === "bot" ? `🤖 ${conv.lastMessage.content}` : conv.lastMessage.content)
-                    : conv.customer.phone ?? "—";
+          {/* Active Conversations */}
+          {tab === "active" && (
+            <>
+              {convLoading && <div className="flex justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-white/40" /></div>}
+              {conversations.map((conv) => {
+                const Icon = getChannelIcon(conv.channel);
+                const isSelected = conv.id === selectedId;
+                const lockedByOther = conv.isLocked && conv.lockedByAgentId !== agent?.id;
+                const hasUnread = conv.unreadCount > 0;
+                const isLive = conv.status === "open" && hasUnread;
+                const lastMsgPreview = conv.lastMessage
+                  ? (conv.lastMessage.sender === "agent" ? `You: ${conv.lastMessage.content}` : conv.lastMessage.sender === "bot" ? `🤖 ${conv.lastMessage.content}` : conv.lastMessage.content)
+                  : conv.customer.phone ?? "—";
 
-                  return (
-                    <div
-                      key={conv.id}
-                      onClick={() => handleSelectConversation(conv.id)}
-                      className={`px-4 py-3 cursor-pointer transition-colors relative flex items-start gap-3 ${
-                        isSelected
-                          ? 'bg-primary/8 border-l-[3px] border-l-primary'
-                          : 'border-l-[3px] border-l-transparent hover:bg-muted/40'
-                      }`}
-                      data-testid={`conversation-item-${conv.id}`}
-                    >
-                      {/* Avatar with channel badge */}
-                      <div className="relative shrink-0 mt-0.5">
-                        <div className={`h-11 w-11 rounded-full flex items-center justify-center text-base font-bold text-white ${
-                          isSelected ? 'bg-primary/80' : 'bg-muted-foreground/30'
-                        }`}>
-                          {conv.customer.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-card flex items-center justify-center border border-border">
-                          <Icon className={`h-3 w-3 ${getChannelColor(conv.channel)}`} />
-                        </div>
-                        {/* Live pulse dot */}
-                        {isLive && !lockedByOther && (
-                          <span className="absolute -top-0.5 -left-0.5 flex h-3 w-3">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                            <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500" />
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => handleSelectConversation(conv.id)}
+                    className={`mx-2 mb-0.5 px-2.5 py-2 rounded-md cursor-pointer transition-colors flex items-center gap-2.5 group ${
+                      isSelected ? 'bg-white/20' : 'hover:bg-white/10'
+                    }`}
+                    data-testid={`conversation-item-${conv.id}`}
+                  >
+                    {/* Avatar */}
+                    <div className="relative shrink-0">
+                      <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${
+                        isSelected ? 'bg-white/30' : 'bg-white/20'
+                      }`}>
+                        {conv.customer.name.charAt(0).toUpperCase()}
+                      </div>
+                      {/* Online status dot */}
+                      {isLive && !lockedByOther ? (
+                        <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400 border-2 border-[#3F0E40]" />
+                        </span>
+                      ) : (
+                        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#3F0E40] bg-white/20" />
+                      )}
+                      {lockedByOther && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 flex items-center justify-center rounded-full bg-amber-400">
+                              <Lock className="h-2 w-2 text-white" />
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>{conv.lockedByAgent?.name} is handling this</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
+
+                    {/* Text content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className={`text-[13px] truncate leading-none ${hasUnread ? 'text-white font-bold' : 'text-white/70 font-medium'}`}>
+                          {conv.customer.name}
+                        </span>
+                        <span className={`text-[11px] shrink-0 leading-none ${hasUnread ? 'text-white/80' : 'text-white/35'}`}>
+                          {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-1 mt-0.5">
+                        <span className={`text-[12px] truncate leading-none ${hasUnread ? 'text-white/80' : 'text-white/45'}`}>
+                          {lockedByOther
+                            ? <span className="text-amber-300 flex items-center gap-1"><Lock className="h-2.5 w-2.5 inline" /> {conv.lockedByAgent?.name}</span>
+                            : <>
+                                <Icon className={`h-2.5 w-2.5 inline mr-0.5 ${getChannelColor(conv.channel)}`} />
+                                {lastMsgPreview}
+                              </>
+                          }
+                        </span>
+                        {hasUnread && (
+                          <span className={`shrink-0 h-4 min-w-[16px] rounded-full bg-white text-[#3F0E40] text-[10px] font-bold flex items-center justify-center px-1 ${isLive ? 'animate-pulse' : ''}`}>
+                            {conv.unreadCount}
                           </span>
                         )}
-                        {lockedByOther && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="absolute -top-0.5 -left-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400">
-                                <Lock className="h-2 w-2 text-white" />
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>{conv.lockedByAgent?.name} is handling this</TooltipContent>
-                          </Tooltip>
-                        )}
                       </div>
+                      {conv.followUpAt && (
+                        <span className="flex items-center gap-0.5 text-[10px] text-amber-300 mt-0.5">
+                          <CalendarClock className="h-2.5 w-2.5" />
+                          {format(new Date(conv.followUpAt), "MMM d")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+              {!convLoading && conversations.length === 0 && (
+                <div className="p-8 text-center text-white/35 text-sm">No active conversations.</div>
+              )}
+            </>
+          )}
 
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        {/* Name + time row */}
-                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <span className={`text-sm font-semibold truncate ${hasUnread ? 'text-foreground' : 'text-foreground/80'}`}>
-                            {conv.customer.name}
-                          </span>
-                          <span className={`text-[11px] shrink-0 ${hasUnread ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
-                            {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
-                          </span>
-                        </div>
-
-                        {/* Preview + unread row */}
-                        <div className="flex items-center justify-between gap-2">
-                          <span className={`text-xs truncate flex-1 ${hasUnread ? 'text-foreground/70 font-medium' : 'text-muted-foreground'}`}>
-                            {lockedByOther
-                              ? <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1"><Lock className="h-2.5 w-2.5 inline" /> {conv.lockedByAgent?.name}</span>
-                              : lastMsgPreview
-                            }
-                          </span>
-                          {hasUnread && (
-                            <span className={`shrink-0 h-5 min-w-[20px] rounded-full bg-primary text-primary-foreground text-[11px] font-bold flex items-center justify-center px-1.5 ${isLive ? 'animate-pulse' : ''}`}>
-                              {conv.unreadCount}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Status row */}
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-4 border-none ${getStatusColor(conv.status)}`}>
-                            {conv.status}
-                          </Badge>
-                          {conv.followUpAt && (
-                            <span className="flex items-center gap-0.5 text-[10px] text-orange-600 dark:text-orange-400 font-medium">
-                              <CalendarClock className="h-2.5 w-2.5" />
-                              {format(new Date(conv.followUpAt), "MMM d")}
-                            </span>
-                          )}
-                          {conv.assignedAgent && (
-                            <span className="text-[10px] text-muted-foreground truncate">
-                              · {conv.assignedAgent.name.split(' ')[0]}
-                            </span>
-                          )}
-                        </div>
+          {/* Closed Conversations */}
+          {tab === "closed" && (
+            <>
+              {closedLoading && <div className="flex justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-white/40" /></div>}
+              {closedConversations.map((conv) => {
+                const Icon = getChannelIcon(conv.channel);
+                const isSelected = conv.id === selectedClosedId;
+                return (
+                  <div
+                    key={conv.id}
+                    onClick={() => setSelectedClosedId(conv.id)}
+                    className={`mx-2 mb-0.5 px-2.5 py-2 rounded-md cursor-pointer transition-colors flex items-center gap-2.5 ${
+                      isSelected ? 'bg-white/20' : 'hover:bg-white/10'
+                    }`}
+                  >
+                    <div className="relative shrink-0">
+                      <div className="h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold text-white bg-white/15">
+                        {conv.customerName.charAt(0).toUpperCase()}
+                      </div>
+                      <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#3F0E40] bg-white/15" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[13px] text-white/50 font-medium truncate leading-none">{conv.customerName}</span>
+                        <span className="text-[11px] text-white/30 shrink-0 leading-none">
+                          {formatDistanceToNow(new Date(conv.closedAt), { addSuffix: true })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Icon className={`h-2.5 w-2.5 ${getChannelColor(conv.channel)} opacity-60`} />
+                        <span className="text-[11px] text-white/35">{conv.messageCount} messages · Archived</span>
                       </div>
                     </div>
-                  );
-                })}
-                {!convLoading && conversations.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground text-sm">No active conversations.</div>
-                )}
-              </>
-            )}
-
-            {/* Closed Conversations */}
-            {tab === "closed" && (
-              <>
-                {closedLoading && <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
-                {closedConversations.map((conv) => {
-                  const Icon = getChannelIcon(conv.channel);
-                  const isSelected = conv.id === selectedClosedId;
-                  return (
-                    <div
-                      key={conv.id}
-                      onClick={() => setSelectedClosedId(conv.id)}
-                      className={`px-4 py-3 cursor-pointer transition-colors flex items-start gap-3 ${
-                        isSelected
-                          ? 'bg-muted/40 border-l-[3px] border-l-muted-foreground'
-                          : 'border-l-[3px] border-l-transparent hover:bg-muted/30'
-                      }`}
-                    >
-                      <div className="relative shrink-0 mt-0.5">
-                        <div className="h-11 w-11 rounded-full flex items-center justify-center text-base font-bold text-white bg-muted-foreground/20">
-                          {conv.customerName.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="absolute -bottom-0.5 -right-0.5 h-5 w-5 rounded-full bg-card flex items-center justify-center border border-border">
-                          <Icon className={`h-3 w-3 ${getChannelColor(conv.channel)}`} />
-                        </div>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <span className="text-sm font-medium truncate text-muted-foreground">{conv.customerName}</span>
-                          <span className="text-[11px] text-muted-foreground shrink-0">
-                            {formatDistanceToNow(new Date(conv.closedAt), { addSuffix: true })}
-                          </span>
-                        </div>
-                        <div className="text-xs text-muted-foreground truncate mb-1">
-                          {conv.customerPhone ?? conv.channel}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground bg-muted/30">
-                            <Archive className="h-2.5 w-2.5 mr-1" /> Closed
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground">{conv.messageCount} msgs</span>
-                          {conv.closedByAgentName && (
-                            <span className="text-[10px] text-muted-foreground truncate">· {conv.closedByAgentName.split(' ')[0]}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-                {!closedLoading && closedConversations.length === 0 && (
-                  <div className="p-8 text-center text-muted-foreground text-sm">No closed conversations yet.</div>
-                )}
-              </>
-            )}
-          </div>
+                  </div>
+                );
+              })}
+              {!closedLoading && closedConversations.length === 0 && (
+                <div className="p-8 text-center text-white/35 text-sm">No closed conversations yet.</div>
+              )}
+            </>
+          )}
         </ScrollArea>
+
+        {/* Bottom: agent info */}
+        <div className="px-3 py-3 border-t border-white/10 flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-sm font-bold text-white shrink-0">
+            {agent?.name?.charAt(0) ?? "A"}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-white text-[13px] font-semibold leading-none truncate">{agent?.name ?? "Agent"}</p>
+            <p className="text-white/45 text-[11px] mt-0.5 truncate">{agent?.role ?? "agent"}</p>
+          </div>
+          <span className="h-2.5 w-2.5 rounded-full bg-green-400 shrink-0" />
+        </div>
       </div>
 
       {/* Right Panel */}
@@ -564,18 +558,18 @@ export default function Inbox() {
             </div>
           )}
 
-          {/* Chat Header */}
-          <div className="h-[72px] border-b flex items-center justify-between px-6 bg-card shrink-0">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-10 w-10 border">
-                <AvatarFallback>{selectedConv.customer.name.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="font-semibold flex items-center gap-2">
+          {/* Chat Header — Slack style */}
+          <div className="h-14 border-b flex items-center justify-between px-4 bg-background shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col">
+                <div className="font-bold text-[15px] flex items-center gap-1.5 leading-tight">
                   {selectedConv.customer.name}
-                  {React.createElement(getChannelIcon(selectedConv.channel), { className: `h-4 w-4 ${getChannelColor(selectedConv.channel)}` })}
+                  {React.createElement(getChannelIcon(selectedConv.channel), { className: `h-3.5 w-3.5 ${getChannelColor(selectedConv.channel)}` })}
                 </div>
-                <div className="text-sm text-muted-foreground">{selectedConv.customer.phone}</div>
+                <div className="text-xs text-muted-foreground leading-tight flex items-center gap-2">
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0 rounded text-[10px] font-medium ${getStatusColor(selectedConv.status)}`}>{selectedConv.status}</span>
+                  {selectedConv.customer.phone && <span>{selectedConv.customer.phone}</span>}
+                </div>
               </div>
             </div>
 
@@ -671,65 +665,66 @@ export default function Inbox() {
             </div>
           </div>
 
-          {/* Messages */}
-          <div
-            className="flex-1 overflow-y-auto px-6 py-4"
-            ref={scrollRef}
-            style={{
-              backgroundImage: `radial-gradient(circle, hsl(var(--muted-foreground)/0.07) 1px, transparent 1px)`,
-              backgroundSize: '20px 20px',
-              backgroundColor: 'hsl(var(--muted)/0.3)',
-            }}
-          >
+          {/* Messages — Slack flat style */}
+          <div className="flex-1 overflow-y-auto bg-background" ref={scrollRef}>
             {messagesLoading && <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
-            <div className="space-y-1">
+            <div className="pt-4 pb-2">
               {messages.map((msg, i) => {
                 const isMe = msg.sender === 'agent';
                 const isBot = msg.sender === 'bot';
                 const isCustomer = msg.sender === 'customer';
                 const showDateDivider = i === 0 || new Date(messages[i - 1].createdAt).toDateString() !== new Date(msg.createdAt).toDateString();
                 const prevSameSender = i > 0 && messages[i - 1].sender === msg.sender;
-                const nextSameSender = i < messages.length - 1 && messages[i + 1].sender === msg.sender;
+                const senderName = isMe ? (agent?.name ?? "Agent") : isBot ? "CommsBot" : selectedConv.customer.name;
+                const avatarColor = isMe ? "bg-violet-600" : isBot ? "bg-blue-500" : "bg-emerald-600";
+                const avatarLetter = isMe ? (agent?.name?.charAt(0) ?? "A") : isBot ? "🤖" : selectedConv.customer.name.charAt(0);
+
                 return (
                   <React.Fragment key={msg.id}>
                     {showDateDivider && (
-                      <div className="flex justify-center my-4">
-                        <div className="bg-card/80 backdrop-blur-sm shadow-sm px-4 py-1 rounded-full text-xs text-muted-foreground font-medium border">
+                      <div className="flex items-center gap-3 mx-4 my-4">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-xs text-muted-foreground font-medium px-2">
                           {format(new Date(msg.createdAt), "MMMM d, yyyy")}
-                        </div>
+                        </span>
+                        <div className="flex-1 h-px bg-border" />
                       </div>
                     )}
-                    <div className={`flex items-end gap-2 ${isMe || isBot ? 'flex-row-reverse' : 'flex-row'} ${prevSameSender ? 'mt-0.5' : 'mt-3'}`}>
-                      {/* Avatar: only show for customer, only on last in a group */}
-                      {isCustomer && (
-                        <div className={`h-7 w-7 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white bg-muted-foreground/40 ${nextSameSender ? 'opacity-0' : ''}`}>
-                          {selectedConv.customer.name.charAt(0)}
-                        </div>
-                      )}
-                      {isBot && (
-                        <div className={`h-7 w-7 rounded-full shrink-0 flex items-center justify-center bg-blue-500 ${nextSameSender ? 'opacity-0' : ''}`}>
-                          <Bot className="h-4 w-4 text-white" />
-                        </div>
-                      )}
+                    <div
+                      className={`group flex items-start gap-3 px-4 py-0.5 hover:bg-muted/30 transition-colors rounded-sm ${prevSameSender && !showDateDivider ? 'mt-0' : 'mt-3'}`}
+                    >
+                      {/* Avatar column — always left */}
+                      <div className="shrink-0 w-9 mt-0.5">
+                        {!prevSameSender || showDateDivider ? (
+                          isBot ? (
+                            <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${avatarColor}`}>
+                              <Bot className="h-5 w-5 text-white" />
+                            </div>
+                          ) : (
+                            <div className={`h-9 w-9 rounded-lg flex items-center justify-center text-sm font-bold text-white ${avatarColor}`}>
+                              {avatarLetter}
+                            </div>
+                          )
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground/0 group-hover:text-muted-foreground/60 leading-9 block text-right select-none transition-colors">
+                            {format(new Date(msg.createdAt), "HH:mm")}
+                          </span>
+                        )}
+                      </div>
 
-                      {/* Bubble */}
-                      <div className={`max-w-[68%] flex flex-col ${isMe || isBot ? 'items-end' : 'items-start'}`}>
-                        <div className={`
-                          px-3.5 py-2 shadow-sm relative
-                          ${isMe
-                            ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md'
-                            : isBot
-                            ? 'bg-blue-500 text-white rounded-2xl rounded-bl-md'
-                            : 'bg-card text-foreground rounded-2xl rounded-bl-md border border-border/50'
-                          }
-                        `}>
-                          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
-                        </div>
-                        <div className={`flex items-center gap-1 mt-1 px-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                          <span className="text-[11px] text-muted-foreground">{format(new Date(msg.createdAt), "HH:mm")}</span>
-                          {isMe && <CheckCircle className="h-3 w-3 text-primary/70" />}
-                          {isBot && <span className="text-[10px] text-blue-500 font-medium">CommsBot</span>}
-                        </div>
+                      {/* Message body */}
+                      <div className="flex-1 min-w-0">
+                        {(!prevSameSender || showDateDivider) && (
+                          <div className="flex items-baseline gap-2 mb-0.5">
+                            <span className={`text-sm font-bold leading-none ${isMe ? 'text-violet-700 dark:text-violet-400' : isBot ? 'text-blue-600 dark:text-blue-400' : 'text-foreground'}`}>
+                              {senderName}
+                            </span>
+                            {isBot && <span className="text-[10px] text-white bg-blue-500 rounded px-1 py-0 font-medium">APP</span>}
+                            {isMe && <span className="text-[10px] text-white bg-violet-500 rounded px-1 py-0 font-medium">Agent</span>}
+                            <span className="text-[11px] text-muted-foreground leading-none">{format(new Date(msg.createdAt), "h:mm a")}</span>
+                          </div>
+                        )}
+                        <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
                       </div>
                     </div>
                   </React.Fragment>
@@ -740,7 +735,7 @@ export default function Inbox() {
               <div className="flex justify-center items-center py-16 text-muted-foreground text-sm">
                 <div className="text-center space-y-2">
                   <MessageSquare className="h-10 w-10 mx-auto opacity-20" />
-                  <p>No messages yet</p>
+                  <p className="font-medium">This is the beginning of your conversation with <strong>{selectedConv.customer.name}</strong></p>
                 </div>
               </div>
             )}
@@ -748,29 +743,29 @@ export default function Inbox() {
 
           {/* AI Suggestions Panel */}
           {showSuggestions && (
-            <div className="border-t bg-gradient-to-r from-violet-50 to-blue-50 dark:from-violet-950/30 dark:to-blue-950/30 px-4 py-3">
+            <div className="border-t bg-violet-50/80 dark:bg-violet-950/20 px-4 py-2.5">
               <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-violet-700 dark:text-violet-400">
-                  <Sparkles className="h-4 w-4" /> AI Reply Suggestions
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-400">
+                  <Sparkles className="h-3.5 w-3.5" /> AI Suggestions
                 </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="sm" onClick={handleGetSuggestions} disabled={isLoadingSuggestions} className="h-6 px-2 text-xs">
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="sm" onClick={handleGetSuggestions} disabled={isLoadingSuggestions} className="h-5 px-2 text-xs text-violet-600">
                     <RefreshCw className={`h-3 w-3 mr-1 ${isLoadingSuggestions ? 'animate-spin' : ''}`} /> Refresh
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setShowSuggestions(false)} className="h-6 px-2 text-xs">
+                  <Button variant="ghost" size="sm" onClick={() => setShowSuggestions(false)} className="h-5 px-2 text-xs">
                     <ChevronUp className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
               {isLoadingSuggestions ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Generating suggestions...
+                <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Generating…
                 </div>
               ) : (
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   {aiSuggestions.map((s, i) => (
                     <button key={i} onClick={() => { setReplyText(s); setShowSuggestions(false); }}
-                      className="w-full text-left text-sm px-3 py-2 rounded-lg bg-white/70 dark:bg-white/10 hover:bg-white dark:hover:bg-white/20 border border-violet-200/60 dark:border-violet-800/60 transition-colors">
+                      className="w-full text-left text-xs px-2.5 py-1.5 rounded-md bg-white dark:bg-white/10 hover:bg-violet-100 dark:hover:bg-violet-900/30 border border-violet-200/80 dark:border-violet-800/50 transition-colors text-foreground">
                       {s}
                     </button>
                   ))}
@@ -779,135 +774,124 @@ export default function Inbox() {
             </div>
           )}
 
-          {/* Reply Box */}
-          <div className="p-4 bg-card border-t shrink-0">
+          {/* Reply Box — Slack style */}
+          <div className="px-4 py-3 bg-background shrink-0">
             {isLockedByOther ? (
-              <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground bg-muted/30 rounded-xl border">
+              <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground bg-muted/40 rounded-lg border">
                 <Lock className="h-4 w-4" />
                 <span>Read-only — <strong>{selectedConv.lockedByAgent?.name}</strong> is handling this</span>
               </div>
             ) : (
-              <>
-                <div className="flex items-end gap-2 bg-muted/30 rounded-xl border p-2 focus-within:ring-1 focus-within:ring-ring transition-all">
-                  <div className="flex gap-1 pb-1">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
-                      <Paperclip className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground">
-                      <Smile className="h-4 w-4" />
-                    </Button>
-                  </div>
+              <div className="rounded-lg border border-input bg-background focus-within:ring-1 focus-within:ring-ring/50 transition-all">
+                {/* Toolbar row */}
+                <div className="flex items-center gap-0.5 px-2 pt-2 pb-1 border-b border-border/40">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground rounded">
+                    <Paperclip className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground rounded">
+                    <Smile className="h-3.5 w-3.5" />
+                  </Button>
+                  <div className="w-px h-4 bg-border/60 mx-1" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" onClick={handleGetSuggestions} disabled={isLoadingSuggestions}
+                        className="h-7 w-7 text-violet-500 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950 rounded" data-testid="button-ai-suggest">
+                        {isLoadingSuggestions ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>AI reply suggestions</TooltipContent>
+                  </Tooltip>
+                </div>
+
+                {/* Text input row */}
+                <div className="flex items-end gap-2 px-3 py-2">
                   <textarea
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder="Type a message... (Enter to send)"
-                    className="flex-1 bg-transparent border-none resize-none outline-none max-h-32 min-h-[40px] py-2 px-2 text-sm"
+                    placeholder={`Message ${selectedConv.customer.name}…`}
+                    className="flex-1 bg-transparent border-none resize-none outline-none max-h-32 min-h-[36px] py-1 text-sm leading-relaxed"
                     rows={1}
                     data-testid="textarea-reply"
                   />
-                  <div className="flex gap-2 pb-1">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button variant="ghost" size="icon" onClick={handleGetSuggestions} disabled={isLoadingSuggestions}
-                          className="h-9 w-9 rounded-lg text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950" data-testid="button-ai-suggest">
-                          {isLoadingSuggestions ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>AI reply suggestions</TooltipContent>
-                    </Tooltip>
-                    <Button onClick={handleSend} disabled={!replyText.trim() || sendMessageMutation.isPending}
-                      className="h-9 px-4 rounded-lg" data-testid="button-send-reply">
-                      {sendMessageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4 mr-2" />Send</>}
-                    </Button>
-                  </div>
+                  <Button
+                    onClick={handleSend}
+                    disabled={!replyText.trim() || sendMessageMutation.isPending}
+                    size="icon"
+                    className="h-8 w-8 rounded-md shrink-0 mb-0.5"
+                    data-testid="button-send-reply"
+                  >
+                    {sendMessageMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
                 </div>
-                <p className="text-[11px] text-muted-foreground mt-1.5 px-2">
-                  ⚡ AI suggestions · Bot Reply to auto-respond · Options menu to close & archive
-                </p>
-              </>
+              </div>
             )}
           </div>
         </div>
       ) : tab === "closed" && selectedClosed ? (
         /* Closed Conversation Thread */
         <div className="flex-1 flex flex-col bg-background min-w-0">
-          <div className="h-[72px] border-b flex items-center justify-between px-6 bg-card shrink-0">
-            <div className="flex items-center gap-4">
-              <Avatar className="h-10 w-10 border bg-muted">
-                <AvatarFallback className="text-muted-foreground">{selectedClosed.customerName.charAt(0)}</AvatarFallback>
-              </Avatar>
-              <div>
-                <div className="font-semibold flex items-center gap-2 text-muted-foreground">
-                  {selectedClosed.customerName}
-                  {React.createElement(getChannelIcon(selectedClosed.channel), { className: `h-4 w-4 ${getChannelColor(selectedClosed.channel)}` })}
-                </div>
-                <div className="text-xs text-muted-foreground flex items-center gap-2">
-                  <Clock className="h-3 w-3" />
-                  Closed {format(new Date(selectedClosed.closedAt), "MMM d, yyyy 'at' HH:mm")}
-                  {selectedClosed.closedByAgentName && ` · by ${selectedClosed.closedByAgentName}`}
-                </div>
+          <div className="h-14 border-b flex items-center justify-between px-4 bg-background shrink-0">
+            <div className="flex flex-col">
+              <div className="font-bold text-[15px] flex items-center gap-1.5 leading-tight text-muted-foreground">
+                {selectedClosed.customerName}
+                {React.createElement(getChannelIcon(selectedClosed.channel), { className: `h-3.5 w-3.5 ${getChannelColor(selectedClosed.channel)}` })}
+              </div>
+              <div className="text-xs text-muted-foreground/60 leading-tight flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Closed {format(new Date(selectedClosed.closedAt), "MMM d, yyyy 'at' HH:mm")}
+                {selectedClosed.closedByAgentName && ` · by ${selectedClosed.closedByAgentName}`}
               </div>
             </div>
-            <Badge variant="outline" className="gap-1 text-muted-foreground">
-              <Archive className="h-3 w-3" /> Archived · Read-only
+            <Badge variant="outline" className="gap-1 text-muted-foreground/60 text-xs">
+              <Archive className="h-3 w-3" /> Archived
             </Badge>
           </div>
 
-          <div
-            className="flex-1 overflow-y-auto px-6 py-4"
-            ref={scrollRef}
-            style={{
-              backgroundImage: `radial-gradient(circle, hsl(var(--muted-foreground)/0.07) 1px, transparent 1px)`,
-              backgroundSize: '20px 20px',
-              backgroundColor: 'hsl(var(--muted)/0.3)',
-            }}
-          >
+          <div className="flex-1 overflow-y-auto bg-muted/10" ref={scrollRef}>
             {closedMessagesLoading && <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
-            <div className="space-y-1">
+            <div className="pt-4 pb-2">
               {closedMessages.map((msg, i) => {
                 const isMe = msg.sender === 'agent';
                 const isBot = msg.sender === 'bot';
-                const isCustomer = msg.sender === 'customer';
                 const showDateDivider = i === 0 || new Date(closedMessages[i - 1].originalCreatedAt).toDateString() !== new Date(msg.originalCreatedAt).toDateString();
                 const prevSameSender = i > 0 && closedMessages[i - 1].sender === msg.sender;
-                const nextSameSender = i < closedMessages.length - 1 && closedMessages[i + 1].sender === msg.sender;
+                const senderName = isMe ? "Agent" : isBot ? "CommsBot" : selectedClosed.customerName;
+                const avatarColor = isMe ? "bg-violet-500/60" : isBot ? "bg-blue-400/60" : "bg-emerald-500/60";
+
                 return (
                   <React.Fragment key={msg.id}>
                     {showDateDivider && (
-                      <div className="flex justify-center my-4">
-                        <div className="bg-card/80 backdrop-blur-sm shadow-sm px-4 py-1 rounded-full text-xs text-muted-foreground font-medium border">
+                      <div className="flex items-center gap-3 mx-4 my-4">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-xs text-muted-foreground font-medium px-2">
                           {format(new Date(msg.originalCreatedAt), "MMMM d, yyyy")}
-                        </div>
+                        </span>
+                        <div className="flex-1 h-px bg-border" />
                       </div>
                     )}
-                    <div className={`flex items-end gap-2 opacity-80 ${isMe || isBot ? 'flex-row-reverse' : 'flex-row'} ${prevSameSender ? 'mt-0.5' : 'mt-3'}`}>
-                      {isCustomer && (
-                        <div className={`h-7 w-7 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white bg-muted-foreground/30 ${nextSameSender ? 'opacity-0' : ''}`}>
-                          {selectedClosed.customerName.charAt(0)}
-                        </div>
-                      )}
-                      {isBot && (
-                        <div className={`h-7 w-7 rounded-full shrink-0 flex items-center justify-center bg-blue-400 ${nextSameSender ? 'opacity-0' : ''}`}>
-                          <Bot className="h-4 w-4 text-white" />
-                        </div>
-                      )}
-                      <div className={`max-w-[68%] flex flex-col ${isMe || isBot ? 'items-end' : 'items-start'}`}>
-                        <div className={`
-                          px-3.5 py-2 shadow-sm
-                          ${isMe
-                            ? 'bg-primary/60 text-primary-foreground rounded-2xl rounded-br-md'
-                            : isBot
-                            ? 'bg-blue-400 text-white rounded-2xl rounded-bl-md'
-                            : 'bg-card/80 text-foreground rounded-2xl rounded-bl-md border border-border/40'
-                          }
-                        `}>
-                          <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
-                        </div>
-                        <div className={`flex items-center gap-1 mt-1 px-1 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                          <span className="text-[11px] text-muted-foreground">{format(new Date(msg.originalCreatedAt), "HH:mm")}</span>
-                          {isBot && <span className="text-[10px] text-blue-400 font-medium">CommsBot</span>}
-                        </div>
+                    <div className={`flex items-start gap-3 px-4 py-0.5 opacity-75 ${prevSameSender && !showDateDivider ? 'mt-0' : 'mt-3'}`}>
+                      <div className="shrink-0 w-9 mt-0.5">
+                        {!prevSameSender || showDateDivider ? (
+                          isBot ? (
+                            <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${avatarColor}`}>
+                              <Bot className="h-5 w-5 text-white" />
+                            </div>
+                          ) : (
+                            <div className={`h-9 w-9 rounded-lg flex items-center justify-center text-sm font-bold text-white ${avatarColor}`}>
+                              {senderName.charAt(0)}
+                            </div>
+                          )
+                        ) : null}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {(!prevSameSender || showDateDivider) && (
+                          <div className="flex items-baseline gap-2 mb-0.5">
+                            <span className="text-sm font-bold leading-none text-muted-foreground">{senderName}</span>
+                            <span className="text-[11px] text-muted-foreground/60 leading-none">{format(new Date(msg.originalCreatedAt), "h:mm a")}</span>
+                          </div>
+                        )}
+                        <p className="text-sm text-foreground/75 leading-relaxed whitespace-pre-wrap break-words">{msg.content}</p>
                       </div>
                     </div>
                   </React.Fragment>
@@ -924,8 +908,8 @@ export default function Inbox() {
             )}
           </div>
 
-          <div className="p-4 bg-card border-t shrink-0">
-            <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground bg-muted/30 rounded-xl border">
+          <div className="px-4 py-3 bg-background border-t shrink-0">
+            <div className="flex items-center justify-center gap-2 py-2.5 text-sm text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
               <Archive className="h-4 w-4" /> This conversation is archived and read-only
             </div>
           </div>
