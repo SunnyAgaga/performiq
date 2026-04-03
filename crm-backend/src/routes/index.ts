@@ -14,6 +14,7 @@ import closedRouter from "./closed.js";
 import feedbackRouter from "./feedback.js";
 import insightsRouter from "./insights.js";
 import emailSettingsRouter from "./email-settings.js";
+import transcriptsRouter from "./transcripts.js";
 
 const router = Router();
 
@@ -35,5 +36,6 @@ router.use(closedRouter);
 router.use(feedbackRouter);
 router.use(insightsRouter);
 router.use(emailSettingsRouter);
+router.use(transcriptsRouter);
 
 export default router;

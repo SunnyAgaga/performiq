@@ -18,6 +18,7 @@ import Admin from "@/pages/admin";
 import Feedback from "@/pages/feedback";
 import FollowUps from "@/pages/follow-ups";
 import Insights from "@/pages/insights";
+import Transcripts from "@/pages/transcripts";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -64,6 +65,7 @@ function Router() {
       <Route path="/feedback" component={() => <PrivateRoute component={Feedback} />} />
       <Route path="/follow-ups" component={() => <PrivateRoute component={FollowUps} />} />
       <Route path="/insights" component={() => <PrivateRoute component={Insights} />} />
+      <Route path="/transcripts" component={() => <PrivateRoute component={Transcripts} />} />
       <Route component={NotFound} />
     </Switch>
   );

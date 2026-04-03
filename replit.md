@@ -112,6 +112,19 @@ The Vite proxy rewrites `/crm/api/*` → `http://localhost:3002/api/*` at dev ti
 - AI Assistant page: 4-tab layout — AI Provider (provider selector + model/key/URL/temp), Knowledge Base, Test Chat, System Prompt
 - Inbox: ⚡ button to get AI suggestions (click to insert); "Bot Reply" button for auto-respond
 
+### Transcripts & Agent KPIs (`/transcripts`)
+- **Sidebar**: "Transcripts" nav item (ScrollText icon) added between Intelligence and Tools section
+- **Two-tab layout**:
+  - **Transcripts tab**: Searchable, paginated conversation list (by customer name/phone); filters for channel, status, agent (admin/supervisor only); click to open full transcript panel showing every message as chat bubbles (customer/agent/bot), metadata bar (response time, CSAT rating), date separators
+  - **Agent KPIs tab**: Per-agent performance cards with weekly/monthly period toggle; shows Conversations handled, Resolution Rate, Avg Response Time, CSAT score — each with progress bar vs. set target; "Set Targets" button opens dialog for admins/supervisors to enter KPI goals
+- **Backend routes** in `crm-backend/src/routes/transcripts.ts`:
+  - `GET /api/transcripts` — paginated conversation list with customer + assignedAgent, message counts; filterable by agentId, channel, status, search
+  - `GET /api/transcripts/:id/messages` — full message thread + feedback + avgResponseMs computed from consecutive customer→agent pairs
+  - `GET /api/transcripts/agent-stats?period=weekly|monthly` — per-agent stats computed from DB (conversations, resolution rate, avg response time, CSAT)
+  - `PUT /api/transcripts/kpi-targets/:agentId` — upsert KPI targets per agent per period
+- **Model**: `AgentKpi` → `crm_agent_kpis` table (agentId, period, targetConversations, targetResponseTimeMins, targetResolutionRate, targetCsatScore)
+- **Role-based**: Agents can view their own stats; Set Targets is hidden for agent role; agent filter only visible to admin/supervisor
+
 ### Mailgun Email Broadcasting
 - **Model**: `EmailSettings` → `crm_email_settings` table (provider, apiKey, domain, region, fromEmail, fromName, isActive)
 - **Routes** in `crm-backend/src/routes/email-settings.ts`:
