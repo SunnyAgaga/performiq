@@ -2,6 +2,13 @@ import { Router } from "express";
 import { db, leaveRequestsTable, leaveApproversTable, usersTable } from "../db/index.js";
 import { eq, or, desc, and, asc, inArray } from "drizzle-orm";
 import { requireAuth, requireRole, AuthRequest } from "../middlewares/auth.js";
+import { sendLeaveNotification } from "../lib/mailgun.js";
+
+function notify(payload: Parameters<typeof sendLeaveNotification>[0]) {
+  sendLeaveNotification(payload).catch(err =>
+    console.error("[leave notify] Failed to send notification:", err?.message ?? err)
+  );
+}
 
 const router = Router();
 
@@ -111,12 +118,31 @@ router.post("/leave-requests", requireAuth, async (req: AuthRequest, res) => {
       await db.update(leaveRequestsTable).set({ reviewerId: orderedApproverIds[0] }).where(eq(leaveRequestsTable.id, row.id));
     }
 
-    const userMap: Record<number, any> = {};
     const allIds = [req.user!.id, ...orderedApproverIds];
     const users = await db.select().from(usersTable).where(inArray(usersTable.id, allIds));
+    const userMap: Record<number, any> = {};
     users.forEach(u => { userMap[u.id] = u; });
 
     const enriched = await enrichLeaveRequest(row, userMap);
+
+    // Notify the first approver that a leave request awaits their review
+    if (orderedApproverIds.length > 0) {
+      const firstApprover = userMap[orderedApproverIds[0]];
+      const employee = userMap[req.user!.id];
+      if (firstApprover?.email) {
+        notify({
+          event: "submitted",
+          to: firstApprover.email,
+          recipientName: firstApprover.name ?? firstApprover.email,
+          employeeName: employee?.name ?? employee?.email ?? "An employee",
+          leaveType: row.leaveType,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          days: row.days,
+        });
+      }
+    }
+
     res.status(201).json(enriched);
   } catch (err) {
     console.error(err);
@@ -175,6 +201,10 @@ router.put("/leave-requests/:id", requireAuth, async (req: AuthRequest, res) => 
         res.status(403).json({ error: "You are not the current approver for this request" }); return;
       }
 
+      // Fetch employee details for notifications
+      const [empUser] = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+        .from(usersTable).where(eq(usersTable.id, row.employeeId)).limit(1);
+
       if (status === "rejected") {
         // Rejection finalizes immediately, mark current approver as rejected
         if (approverRows.length > 0) {
@@ -185,6 +215,22 @@ router.put("/leave-requests/:id", requireAuth, async (req: AuthRequest, res) => 
         const [updated] = await db.update(leaveRequestsTable)
           .set({ status: "rejected", reviewerId: id, reviewNote: reviewNote || null, updatedAt: new Date() })
           .where(eq(leaveRequestsTable.id, row.id)).returning();
+
+        // Notify employee that their request was rejected
+        if (empUser?.email) {
+          notify({
+            event: "rejected",
+            to: empUser.email,
+            recipientName: empUser.name ?? empUser.email,
+            employeeName: empUser.name ?? empUser.email,
+            leaveType: row.leaveType,
+            startDate: row.startDate,
+            endDate: row.endDate,
+            days: row.days,
+            reviewerNote: reviewNote || undefined,
+          });
+        }
+
         const userMap: Record<number, any> = {};
         res.json(await enrichLeaveRequest(updated, userMap));
         return;
@@ -214,6 +260,41 @@ router.put("/leave-requests/:id", requireAuth, async (req: AuthRequest, res) => 
           updatedAt: new Date(),
         })
         .where(eq(leaveRequestsTable.id, row.id)).returning();
+
+      const employeeName = empUser?.name ?? empUser?.email ?? "An employee";
+
+      if (finalStatus === "approved") {
+        // Fully approved — notify the employee
+        if (empUser?.email) {
+          notify({
+            event: "approved",
+            to: empUser.email,
+            recipientName: empUser.name ?? empUser.email,
+            employeeName,
+            leaveType: row.leaveType,
+            startDate: row.startDate,
+            endDate: row.endDate,
+            days: row.days,
+            reviewerNote: reviewNote || undefined,
+          });
+        }
+      } else if (nextApproverId) {
+        // Still pending — notify the next approver in the chain
+        const [nextApprover] = await db.select({ id: usersTable.id, name: usersTable.name, email: usersTable.email })
+          .from(usersTable).where(eq(usersTable.id, nextApproverId)).limit(1);
+        if (nextApprover?.email) {
+          notify({
+            event: "awaiting_next",
+            to: nextApprover.email,
+            recipientName: nextApprover.name ?? nextApprover.email,
+            employeeName,
+            leaveType: row.leaveType,
+            startDate: row.startDate,
+            endDate: row.endDate,
+            days: row.days,
+          });
+        }
+      }
 
       const userMap: Record<number, any> = {};
       res.json(await enrichLeaveRequest(updated, userMap));

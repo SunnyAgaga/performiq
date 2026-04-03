@@ -235,72 +235,81 @@ export default function Leave() {
       ) : (
         <>
           {isAdmin && <BulkActionBar count={selectedIds.size} onDelete={handleBulkDelete} onClear={() => setSelectedIds(new Set())} deleting={bulkDeleting} />}
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(req => {
             const isCurrentApprover = req.currentApproverId === user?.id;
             const canReview = isManager && req.status === "pending" && (isCurrentApprover || user?.role === "admin" || user?.role === "super_admin");
 
             return (
-              <Card key={req.id} className={`p-5 ${selectedIds.has(req.id) ? "ring-2 ring-primary/30" : ""}`}>
-                <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 mb-1">
-                      {isAdmin && (
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.has(req.id)}
-                          onChange={() => toggleSelect(req.id)}
-                          className="w-4 h-4 accent-primary cursor-pointer"
-                        />
-                      )}
-                      <span className="font-semibold text-foreground">{LEAVE_LABEL[req.leaveType] ?? req.leaveType}</span>
-                      <StatusBadge status={req.status} />
-                    </div>
-                    {isManager && req.employee && (
-                      <p className="text-sm text-muted-foreground mb-1">
-                        <span className="font-medium text-foreground">{req.employee.name}</span>
-                        {req.employee.department && <span> · {req.employee.department}</span>}
-                      </p>
+              <Card key={req.id} className={`p-5 flex flex-col gap-3 ${selectedIds.has(req.id) ? "ring-2 ring-primary/30" : ""}`}>
+                {/* Card header: checkbox + type + status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {isAdmin && (
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(req.id)}
+                        onChange={() => toggleSelect(req.id)}
+                        className="w-4 h-4 accent-primary cursor-pointer shrink-0"
+                      />
                     )}
-                    <p className="text-sm text-muted-foreground">
-                      {fmt(req.startDate)} – {fmt(req.endDate)} &nbsp;·&nbsp; <span className="font-medium">{req.days} day{req.days !== 1 ? "s" : ""}</span>
-                    </p>
-                    {req.reason && <p className="text-sm text-muted-foreground mt-1">Reason: {req.reason}</p>}
-
-                    {/* Sequential Approval Chain */}
-                    {req.approvers && req.approvers.length > 0 && (
-                      <div className="mt-3 flex flex-wrap items-center gap-1">
-                        <span className="text-xs text-muted-foreground font-medium mr-1">Approval chain:</span>
-                        {req.approvers.map((step, i) => {
-                          const stepCfg = STEP_CONFIG[step.status] ?? STEP_CONFIG.pending;
-                          const isActive = step.status === 'pending' && req.status === 'pending';
-                          return (
-                            <span key={step.id} className="flex items-center gap-1">
-                              {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/50" />}
-                              <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${stepCfg.color} ${isActive ? 'ring-1 ring-amber-400' : ''}`}>
-                                <span className="opacity-60 font-normal">{i + 1}.</span>
-                                {step.approver?.name ?? `Approver ${i + 1}`}
-                                {step.status === 'approved' && <CheckCircle2 className="w-3 h-3" />}
-                                {step.status === 'rejected' && <XCircle className="w-3 h-3" />}
-                                {isActive && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
-                              </span>
-                              {step.note && (
-                                <span className="text-xs text-muted-foreground italic">"{step.note}"</span>
-                              )}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {req.reviewNote && !req.approvers?.some(a => a.note) && (
-                      <p className="text-sm mt-1">
-                        <span className="font-medium">{req.reviewer?.name ?? "Reviewer"}:</span> {req.reviewNote}
-                      </p>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-2">Submitted {fmt(req.createdAt)}</p>
+                    <span className="font-semibold text-foreground truncate">{LEAVE_LABEL[req.leaveType] ?? req.leaveType}</span>
                   </div>
-                  <div className="flex flex-wrap gap-2 shrink-0">
+                  <StatusBadge status={req.status} />
+                </div>
+
+                {/* Employee (managers/admins) */}
+                {isManager && req.employee && (
+                  <p className="text-sm text-muted-foreground -mt-1">
+                    <span className="font-medium text-foreground">{req.employee.name}</span>
+                    {req.employee.department && <span> · {req.employee.department}</span>}
+                  </p>
+                )}
+
+                {/* Dates */}
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <CalendarDays className="w-3.5 h-3.5 shrink-0" />
+                  {fmt(req.startDate)} – {fmt(req.endDate)}
+                  <span className="ml-1 font-medium text-foreground">{req.days}d</span>
+                </p>
+
+                {/* Reason */}
+                {req.reason && (
+                  <p className="text-sm text-muted-foreground line-clamp-2">"{req.reason}"</p>
+                )}
+
+                {/* Sequential Approval Chain */}
+                {req.approvers && req.approvers.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="text-xs text-muted-foreground font-medium w-full mb-0.5">Approval chain:</span>
+                    {req.approvers.map((step, i) => {
+                      const stepCfg = STEP_CONFIG[step.status] ?? STEP_CONFIG.pending;
+                      const isActive = step.status === 'pending' && req.status === 'pending';
+                      return (
+                        <span key={step.id} className="flex items-center gap-1">
+                          {i > 0 && <ChevronRight className="w-3 h-3 text-muted-foreground/50" />}
+                          <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full border ${stepCfg.color} ${isActive ? 'ring-1 ring-amber-400' : ''}`}>
+                            <span className="opacity-60 font-normal">{i + 1}.</span>
+                            {step.approver?.name ?? `Approver ${i + 1}`}
+                            {step.status === 'approved' && <CheckCircle2 className="w-3 h-3" />}
+                            {step.status === 'rejected' && <XCircle className="w-3 h-3" />}
+                            {isActive && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />}
+                          </span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {req.reviewNote && !req.approvers?.some(a => a.note) && (
+                  <p className="text-sm text-muted-foreground italic">"{req.reviewNote}"</p>
+                )}
+
+                <p className="text-xs text-muted-foreground mt-auto">Submitted {fmt(req.createdAt)}</p>
+
+                {/* Actions */}
+                {(req.status === "pending" && req.employee?.id === user?.id) || canReview ? (
+                  <div className="flex flex-wrap gap-2 pt-1 border-t border-border">
                     {req.status === "pending" && req.employee?.id === user?.id && (
                       <Button variant="outline" size="sm" onClick={() => handleCancel(req.id)}>Cancel</Button>
                     )}
@@ -315,7 +324,7 @@ export default function Leave() {
                       </>
                     )}
                   </div>
-                </div>
+                ) : null}
               </Card>
             );
           })}
