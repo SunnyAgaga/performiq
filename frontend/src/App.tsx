@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { AppSettingsProvider } from "@/hooks/use-app-settings";
 import { AppLayout } from "@/components/layout";
 import { FullPageLoader } from "@/components/shared";
 import NotFound from "@/pages/not-found";
@@ -26,6 +27,7 @@ import Onboarding from "@/pages/onboarding";
 import HrQueries from "@/pages/hr-queries";
 import Profile from "@/pages/profile";
 import Security from "@/pages/security";
+import Appearance from "@/pages/appearance";
 
 const queryClient = new QueryClient();
 
@@ -106,6 +108,9 @@ function Router() {
       <Route path="/security">
         <AppLayout><ProtectedRoute component={Security} /></AppLayout>
       </Route>
+      <Route path="/appearance">
+        <AppLayout><ProtectedRoute component={Appearance} /></AppLayout>
+      </Route>
 
       <Route component={NotFound} />
     </Switch>
@@ -117,10 +122,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <AuthProvider>
-            <Router />
-            <Toaster />
-          </AuthProvider>
+          <AppSettingsProvider>
+            <AuthProvider>
+              <Router />
+              <Toaster />
+            </AuthProvider>
+          </AppSettingsProvider>
         </WouterRouter>
       </TooltipProvider>
     </QueryClientProvider>

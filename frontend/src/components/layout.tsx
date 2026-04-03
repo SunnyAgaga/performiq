@@ -23,9 +23,11 @@ import {
   UserPlus,
   MessageSquareWarning,
   ShieldAlert,
+  Paintbrush,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { User } from "@/lib";
+import { useAppSettings } from "@/hooks/use-app-settings";
 
 const NAV_ITEMS: { name: string; path: string; icon: any; roles: string[]; customRoles?: string[] }[] = [
   { name: "Dashboard",   path: "/dashboard",   icon: LayoutDashboard, roles: ["super_admin", "admin", "manager", "employee"] },
@@ -44,6 +46,7 @@ const NAV_ITEMS: { name: string; path: string; icon: any; roles: string[]; custo
   { name: "Sites",       path: "/sites",        icon: MapPin,          roles: ["super_admin", "admin"] },
   { name: "Roles",       path: "/roles",        icon: Shield,          roles: ["super_admin", "admin"] },
   { name: "Security",    path: "/security",     icon: ShieldAlert,     roles: ["super_admin", "admin"] },
+  { name: "Appearance",  path: "/appearance",   icon: Paintbrush,      roles: ["super_admin", "admin"] },
 ];
 
 interface NavLinksProps {
@@ -106,6 +109,7 @@ function userDisplayName(user: User): string {
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth();
+  const { settings } = useAppSettings();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!user) return <>{children}</>;
@@ -117,9 +121,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 py-5 border-b border-border">
           <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-primary-foreground font-bold text-lg shrink-0">
-            P
+            {settings.logoLetter}
           </div>
-          <span className="font-bold text-xl tracking-tight">PerformIQ</span>
+          <span className="font-bold text-xl tracking-tight">{settings.companyName}</span>
         </div>
 
         {/* Nav */}
@@ -178,9 +182,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
               <div className="flex items-center justify-between px-6 py-5 border-b border-border">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-primary-foreground font-bold text-lg shrink-0">
-                    P
+                    {settings.logoLetter}
                   </div>
-                  <span className="font-bold text-xl tracking-tight">PerformIQ</span>
+                  <span className="font-bold text-xl tracking-tight">{settings.companyName}</span>
                 </div>
                 <button onClick={() => setSidebarOpen(false)} className="p-1 text-muted-foreground hover:text-foreground">
                   <X className="w-5 h-5" />
@@ -232,9 +236,9 @@ export function AppLayout({ children }: { children: ReactNode }) {
           </button>
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-primary rounded-lg flex items-center justify-center text-primary-foreground font-bold text-sm">
-              P
+              {settings.logoLetter}
             </div>
-            <span className="font-bold text-base tracking-tight">PerformIQ</span>
+            <span className="font-bold text-base tracking-tight">{settings.companyName}</span>
           </div>
           <Link href="/profile" className="w-8 h-8 rounded-full bg-muted flex items-center justify-center font-bold text-sm border border-border">
             {userInitial(user)}
