@@ -10,6 +10,7 @@ export { Feedback } from "./Feedback.js";
 export { KnowledgeDoc } from "./KnowledgeDoc.js";
 export { AiSettings } from "./AiSettings.js";
 export type { AiProvider } from "./AiSettings.js";
+export { EmailSettings } from "./EmailSettings.js";
 
 import { Agent } from "./Agent.js";
 import { Customer } from "./Customer.js";

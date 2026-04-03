@@ -8,12 +8,24 @@ import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { SiWhatsapp, SiFacebook, SiInstagram } from "react-icons/si";
-import { CheckCircle2, Bot, Trash2, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { SiWhatsapp, SiFacebook, SiInstagram, SiMailgun } from "react-icons/si";
+import { CheckCircle2, Bot, Trash2, Loader2, Eye, EyeOff, XCircle, Zap, Send, Globe } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiGet, apiPost, apiPut } from "@/lib/api";
+import { apiGet, apiPost, apiPut, getBaseUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
+interface EmailConfig {
+  id: number;
+  provider: string;
+  hasApiKey: boolean;
+  domain: string | null;
+  region: "us" | "eu";
+  fromEmail: string | null;
+  fromName: string | null;
+  isActive: boolean;
+}
 
 interface ApiAgent { id: number; name: string; email: string; role: string; isActive: boolean; }
 
@@ -52,6 +64,82 @@ export default function Settings() {
       qc.invalidateQueries({ queryKey: ["agents"] });
     },
   });
+
+  // ── Mailgun state ──────────────────────────────────────────────────────────
+  const [mgApiKey, setMgApiKey] = useState("");
+  const [mgDomain, setMgDomain] = useState("");
+  const [mgRegion, setMgRegion] = useState<"us" | "eu">("us");
+  const [mgFromEmail, setMgFromEmail] = useState("");
+  const [mgFromName, setMgFromName] = useState("CommsCRM");
+  const [mgActive, setMgActive] = useState(false);
+  const [showMgKey, setShowMgKey] = useState(false);
+  const [mgTestEmail, setMgTestEmail] = useState("");
+  const [mgTesting, setMgTesting] = useState(false);
+  const [mgValidating, setMgValidating] = useState(false);
+  const [mgTestResult, setMgTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const { data: emailConfig, isLoading: emailLoading } = useQuery<EmailConfig>({
+    queryKey: ["email-settings"],
+    queryFn: () => apiGet("/settings/email"),
+    onSuccess: (d) => {
+      setMgDomain(d.domain ?? "");
+      setMgRegion(d.region ?? "us");
+      setMgFromEmail(d.fromEmail ?? "");
+      setMgFromName(d.fromName ?? "CommsCRM");
+      setMgActive(d.isActive ?? false);
+    },
+  } as Parameters<typeof useQuery>[0]);
+
+  const saveEmailMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => apiPut("/settings/email", data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["email-settings"] });
+      setMgTestResult(null);
+      toast({ title: "Mailgun settings saved!", description: mgActive ? "Email broadcasting is now active." : "Settings saved. Toggle 'Active' to enable broadcasting." });
+    },
+    onError: () => toast({ title: "Failed to save settings", variant: "destructive" }),
+  });
+
+  const validateDomain = async () => {
+    setMgValidating(true);
+    setMgTestResult(null);
+    try {
+      const token = localStorage.getItem("crm_token");
+      const baseUrl = getBaseUrl();
+      const res = await fetch(`${baseUrl}/settings/email/validate-domain`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ apiKey: mgApiKey || undefined, domain: mgDomain, region: mgRegion }),
+      });
+      const data = await res.json() as { ok: boolean; message: string };
+      setMgTestResult(data);
+    } catch {
+      setMgTestResult({ ok: false, message: "Network error" });
+    } finally {
+      setMgValidating(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    if (!mgTestEmail) { toast({ title: "Enter a test email address first", variant: "destructive" }); return; }
+    setMgTesting(true);
+    setMgTestResult(null);
+    try {
+      const token = localStorage.getItem("crm_token");
+      const baseUrl = getBaseUrl();
+      const res = await fetch(`${baseUrl}/settings/email/test`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ testEmail: mgTestEmail, apiKey: mgApiKey || undefined, domain: mgDomain, region: mgRegion, fromEmail: mgFromEmail, fromName: mgFromName }),
+      });
+      const data = await res.json() as { ok: boolean; message: string };
+      setMgTestResult(data);
+    } catch {
+      setMgTestResult({ ok: false, message: "Network error" });
+    } finally {
+      setMgTesting(false);
+    }
+  };
 
   const handleSave = () => {
     toast({ title: "Settings Saved", description: "Your configuration has been updated successfully." });
@@ -158,6 +246,165 @@ export default function Settings() {
           </CardContent>
           <CardFooter className="border-t bg-muted/20 px-6 py-4">
             <Button onClick={handleSave} data-testid="button-save-ai-settings">Save Automation Settings</Button>
+          </CardFooter>
+        </Card>
+
+        {/* Mailgun / Email Broadcasting Card */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-[#FF0010]/10 flex items-center justify-center">
+                  <SiMailgun className="h-5 w-5 text-[#FF0010]" />
+                </div>
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    Mailgun — Email Broadcasting
+                    {emailConfig?.isActive ? (
+                      <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400">Active</Badge>
+                    ) : (
+                      <Badge variant="secondary">Inactive</Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>Connect Mailgun to send email campaigns to your customer list.</CardDescription>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <Label className="text-sm text-muted-foreground">Enabled</Label>
+                <Switch checked={mgActive} onCheckedChange={setMgActive} />
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="space-y-5">
+            {emailLoading ? (
+              <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* API Key */}
+                  <div className="sm:col-span-2">
+                    <Label className="flex items-center gap-1.5 mb-1.5">
+                      API Key
+                      {emailConfig?.hasApiKey && <Badge variant="secondary" className="text-[10px] h-4">stored</Badge>}
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type={showMgKey ? "text" : "password"}
+                        placeholder={emailConfig?.hasApiKey ? "••••••••• (leave blank to keep existing)" : "key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-xxxxxxxx-xxxxxxxx"}
+                        value={mgApiKey}
+                        onChange={(e) => setMgApiKey(e.target.value)}
+                        className="pr-10 font-mono text-sm"
+                      />
+                      <button onClick={() => setShowMgKey((v) => !v)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
+                        {showMgKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Find your API key at <span className="font-mono">app.mailgun.com → Account → API Keys</span>
+                    </p>
+                  </div>
+
+                  {/* Domain */}
+                  <div>
+                    <Label className="mb-1.5 flex items-center gap-1.5"><Globe className="h-3.5 w-3.5" /> Sending Domain</Label>
+                    <Input
+                      placeholder="mg.yourdomain.com"
+                      value={mgDomain}
+                      onChange={(e) => setMgDomain(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">The domain you configured in Mailgun</p>
+                  </div>
+
+                  {/* Region */}
+                  <div>
+                    <Label className="mb-1.5">Mailgun Region</Label>
+                    <Select value={mgRegion} onValueChange={(v) => setMgRegion(v as "us" | "eu")}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="us">🇺🇸 US (api.mailgun.net)</SelectItem>
+                        <SelectItem value="eu">🇪🇺 EU (api.eu.mailgun.net)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* From Name */}
+                  <div>
+                    <Label className="mb-1.5">From Name</Label>
+                    <Input
+                      placeholder="CommsCRM"
+                      value={mgFromName}
+                      onChange={(e) => setMgFromName(e.target.value)}
+                    />
+                  </div>
+
+                  {/* From Email */}
+                  <div>
+                    <Label className="mb-1.5">From Email</Label>
+                    <Input
+                      type="email"
+                      placeholder="noreply@mg.yourdomain.com"
+                      value={mgFromEmail}
+                      onChange={(e) => setMgFromEmail(e.target.value)}
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Must use your verified Mailgun domain</p>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Validate domain + test email */}
+                <div>
+                  <p className="text-sm font-medium mb-3">Test & Validate</p>
+                  <div className="flex gap-3 flex-wrap items-end">
+                    <div className="flex-1 min-w-48">
+                      <Label className="text-xs text-muted-foreground mb-1.5 block">Test recipient email</Label>
+                      <Input
+                        type="email"
+                        placeholder="you@example.com"
+                        value={mgTestEmail}
+                        onChange={(e) => setMgTestEmail(e.target.value)}
+                      />
+                    </div>
+                    <Button variant="outline" onClick={validateDomain} disabled={mgValidating || !mgDomain} className="gap-2">
+                      {mgValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}
+                      Validate Domain
+                    </Button>
+                    <Button variant="outline" onClick={sendTestEmail} disabled={mgTesting || !mgTestEmail} className="gap-2">
+                      {mgTesting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      Send Test Email
+                    </Button>
+                  </div>
+
+                  {mgTestResult && (
+                    <div className={`mt-3 p-3 rounded-lg border text-xs flex items-start gap-2 ${mgTestResult.ok ? "bg-green-50 border-green-200 text-green-700 dark:bg-green-950/20 dark:border-green-900 dark:text-green-400" : "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/20 dark:border-red-900 dark:text-red-400"}`}>
+                      {mgTestResult.ok ? <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" /> : <XCircle className="h-4 w-4 shrink-0 mt-0.5" />}
+                      <span>{mgTestResult.message}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* How it works */}
+                <div className="p-4 rounded-xl bg-muted/40 border text-xs text-muted-foreground space-y-1.5">
+                  <p className="font-semibold text-foreground text-sm">How email broadcasting works</p>
+                  <p>When you mark an <strong>email campaign</strong> as "Sent" in the Campaigns page, CommsCRM automatically sends it to all customers who have an email address on file via Mailgun.</p>
+                  <p className="mt-1">Campaigns sent to other channels (WhatsApp, Facebook, etc.) are not affected by this setting.</p>
+                </div>
+              </>
+            )}
+          </CardContent>
+
+          <CardFooter className="border-t bg-muted/20 px-6 py-4">
+            <Button
+              onClick={() => saveEmailMutation.mutate({ apiKey: mgApiKey || undefined, domain: mgDomain, region: mgRegion, fromEmail: mgFromEmail, fromName: mgFromName, isActive: mgActive })}
+              disabled={saveEmailMutation.isPending}
+              className="gap-2"
+            >
+              {saveEmailMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Mailgun Settings
+            </Button>
           </CardFooter>
         </Card>
 

@@ -13,6 +13,7 @@ import webhooksRouter from "./webhooks.js";
 import closedRouter from "./closed.js";
 import feedbackRouter from "./feedback.js";
 import insightsRouter from "./insights.js";
+import emailSettingsRouter from "./email-settings.js";
 
 const router = Router();
 
@@ -33,5 +34,6 @@ router.use(aiSettingsRouter);
 router.use(closedRouter);
 router.use(feedbackRouter);
 router.use(insightsRouter);
+router.use(emailSettingsRouter);
 
 export default router;

@@ -112,6 +112,18 @@ The Vite proxy rewrites `/crm/api/*` → `http://localhost:3002/api/*` at dev ti
 - AI Assistant page: 4-tab layout — AI Provider (provider selector + model/key/URL/temp), Knowledge Base, Test Chat, System Prompt
 - Inbox: ⚡ button to get AI suggestions (click to insert); "Bot Reply" button for auto-respond
 
+### Mailgun Email Broadcasting
+- **Model**: `EmailSettings` → `crm_email_settings` table (provider, apiKey, domain, region, fromEmail, fromName, isActive)
+- **Routes** in `crm-backend/src/routes/email-settings.ts`:
+  - `GET /api/settings/email` — get Mailgun config (returns `hasApiKey` not raw key)
+  - `PUT /api/settings/email` — save API key, domain, region, fromEmail, fromName, isActive
+  - `POST /api/settings/email/validate-domain` — verify the Mailgun domain is active
+  - `POST /api/settings/email/test` — send a real test email to a given address
+- **Mailgun helper**: `crm-backend/src/lib/mailgun.ts` — `sendEmail()`, `testMailgunConnection()`, `validateDomain()`, `buildMailgunConfig()`; uses Mailgun REST API directly (no SDK), supports US + EU regions
+- **Campaigns integration** in `campaigns.ts`: When an email campaign is marked "sent", CommsCRM auto-sends to all customers with an email address via Mailgun in batches of 1000; new `POST /api/campaigns/:id/send` endpoint for explicit send-now
+- **Settings page**: Mailgun card added between AI & Automation and Team Management — API key (show/hide), domain, region selector, from name/email, validate domain button, send test email button, active toggle
+- **Settings page location**: `artifacts/hira-crm/src/pages/settings.tsx`
+
 ### Customer Intelligence (`/insights`)
 - **Route**: `GET /api/insights/customer?days=30` — full analytics on customer messages
 - **Keyword-based analysis** (no AI cost) extracts:
