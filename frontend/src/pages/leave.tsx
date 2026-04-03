@@ -11,7 +11,7 @@ type LeaveType = typeof LEAVE_TYPES[number];
 type LeaveStatus = "pending" | "approved" | "rejected" | "cancelled";
 
 const LEAVE_LABEL: Record<LeaveType, string> = {
-  annual: "Annual Leave", sick: "Sick Leave", personal: "Personal Leave",
+  annual: "Annual Leave", sick: "Sick Leave", personal: "Casual Leave",
   maternity: "Maternity Leave", paternity: "Paternity Leave", unpaid: "Unpaid Leave", other: "Other",
 };
 
