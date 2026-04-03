@@ -15,7 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   Search, MoreVertical, Send, CheckCircle, Paperclip, Smile,
   UserPlus, MessageSquare, Loader2, Sparkles, Bot, Zap, RefreshCw,
-  ChevronUp, Lock, AlertTriangle, Archive, Clock, CalendarClock
+  ChevronUp, Lock, AlertTriangle, Archive, Clock, CalendarClock, ListOrdered
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -68,13 +68,13 @@ interface ClosedConversation {
 interface ClosedConversationListResponse { total: number; conversations: ClosedConversation[]; }
 interface ClosedMessage { id: number; sender: "customer" | "agent" | "bot"; content: string; originalCreatedAt: string; }
 
-type InboxTab = "active" | "closed";
+type InboxTab = "queue" | "active" | "closed";
 
 export default function Inbox() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { agent } = useAuth();
-  const [tab, setTab] = useState<InboxTab>("active");
+  const [tab, setTab] = useState<InboxTab>("queue");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedClosedId, setSelectedClosedId] = useState<number | null>(null);
   const [filter, setFilter] = useState<string>("all");
@@ -93,16 +93,20 @@ export default function Inbox() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const convParams = new URLSearchParams();
-  if (filter !== "all") convParams.set("status", filter);
+  if (tab === "queue") {
+    convParams.set("status", "open,pending");
+  } else if (filter !== "all") {
+    convParams.set("status", filter);
+  }
   if (channelFilter !== "all") convParams.set("channel", channelFilter);
   if (searchQuery) convParams.set("search", searchQuery);
   convParams.set("limit", "50");
 
   const { data: convData, isLoading: convLoading } = useQuery<ConversationListResponse>({
-    queryKey: ["conversations", filter, channelFilter, searchQuery],
+    queryKey: ["conversations", tab, filter, channelFilter, searchQuery],
     queryFn: () => apiGet(`/conversations?${convParams.toString()}`),
     refetchInterval: 5000,
-    enabled: tab === "active",
+    enabled: tab === "active" || tab === "queue",
   });
 
   const closedParams = new URLSearchParams();
@@ -160,7 +164,7 @@ export default function Inbox() {
   }, []);
 
   useEffect(() => {
-    if (conversations.length > 0 && !selectedId && tab === "active") {
+    if (conversations.length > 0 && !selectedId && (tab === "active" || tab === "queue")) {
       const firstUnlocked = conversations.find((c) => !c.isLocked || c.lockedByAgentId === agent?.id);
       setSelectedId(firstUnlocked?.id ?? conversations[0].id);
     }
@@ -303,9 +307,12 @@ export default function Inbox() {
               <span className="text-white font-bold text-[15px] leading-tight">CommsCRM</span>
               <span className="text-white/40 text-xs">▾</span>
             </div>
-            <Tabs value={tab} onValueChange={(v) => { setTab(v as InboxTab); setSelectedId(null); setSelectedClosedId(null); setChannelFilter("all"); }}>
+            <Tabs value={tab} onValueChange={(v) => { setTab(v as InboxTab); setSelectedId(null); setSelectedClosedId(null); setChannelFilter("all"); setFilter("all"); }}>
               <TabsList className="h-6 bg-white/15 gap-0 p-0.5">
-                <TabsTrigger value="active" className="text-[11px] h-5 px-2 text-white/70 data-[state=active]:bg-white/20 data-[state=active]:text-white rounded">Active</TabsTrigger>
+                <TabsTrigger value="queue" className="text-[11px] h-5 px-2 text-white/70 data-[state=active]:bg-white/20 data-[state=active]:text-white rounded gap-1">
+                  <ListOrdered className="h-2.5 w-2.5" /> Queue
+                </TabsTrigger>
+                <TabsTrigger value="active" className="text-[11px] h-5 px-2 text-white/70 data-[state=active]:bg-white/20 data-[state=active]:text-white rounded">All</TabsTrigger>
                 <TabsTrigger value="closed" className="text-[11px] h-5 px-2 text-white/70 data-[state=active]:bg-white/20 data-[state=active]:text-white rounded gap-1">
                   <Archive className="h-2.5 w-2.5" /> Closed
                 </TabsTrigger>
@@ -327,7 +334,7 @@ export default function Inbox() {
         </div>
 
         {/* Channel filter + status filter */}
-        {tab === "active" && (() => {
+        {(tab === "active" || tab === "queue") && (() => {
           const WhatsAppIcon = getChannelIcon("whatsapp");
           const FacebookIcon = getChannelIcon("facebook");
           const InstagramIcon = getChannelIcon("instagram");
@@ -353,32 +360,143 @@ export default function Inbox() {
                   {ch.label}
                 </button>
               ))}
-              <div className="ml-auto">
-                <Select value={filter} onValueChange={setFilter}>
-                  <SelectTrigger className="h-5 text-[11px] bg-transparent border-white/20 text-white/60 w-[80px] focus:ring-0 px-2" data-testid="select-filter-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="resolved">Resolved</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {tab === "active" && (
+                <div className="ml-auto">
+                  <Select value={filter} onValueChange={setFilter}>
+                    <SelectTrigger className="h-5 text-[11px] bg-transparent border-white/20 text-white/60 w-[80px] focus:ring-0 px-2" data-testid="select-filter-status">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All</SelectItem>
+                      <SelectItem value="open">Open</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="resolved">Resolved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
           );
         })()}
 
         {/* Section label */}
-        <div className="px-4 pt-2 pb-1">
+        <div className="px-4 pt-2 pb-1 flex items-center justify-between">
           <span className="text-white/40 text-[11px] font-semibold uppercase tracking-wider">
-            {tab === "active" ? "Direct Messages" : "Archived"}
+            {tab === "queue" ? "Needs Attention" : tab === "active" ? "All Conversations" : "Archived"}
           </span>
+          {tab === "queue" && conversations.length > 0 && (
+            <span className="text-[10px] font-bold bg-white/20 text-white/80 rounded-full px-1.5 py-0.5 leading-none">
+              {conversations.length}
+            </span>
+          )}
         </div>
 
         <ScrollArea className="flex-1">
-          {/* Active Conversations */}
+          {/* Queue Tab — grouped by Open / Pending */}
+          {tab === "queue" && (
+            <>
+              {convLoading && <div className="flex justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-white/40" /></div>}
+              {!convLoading && conversations.length === 0 && (
+                <div className="px-4 py-8 text-center">
+                  <div className="text-white/20 text-3xl mb-2">✓</div>
+                  <p className="text-white/40 text-xs font-medium">Queue is clear!</p>
+                  <p className="text-white/25 text-[11px] mt-1">No open or pending chats.</p>
+                </div>
+              )}
+              {["open", "pending"].map((status) => {
+                const group = conversations.filter((c) => c.status === status);
+                if (group.length === 0) return null;
+                const groupLabel = status === "open" ? "🔴 New / Open" : "🟡 Pending";
+                const groupColor = status === "open" ? "text-red-300/70" : "text-yellow-300/70";
+                return (
+                  <div key={status}>
+                    <div className={`px-4 pt-3 pb-1 flex items-center gap-2`}>
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${groupColor}`}>{groupLabel}</span>
+                      <span className={`text-[10px] font-bold bg-white/10 rounded-full px-1.5 py-0.5 leading-none ${groupColor}`}>{group.length}</span>
+                    </div>
+                    {group.map((conv) => {
+                      const Icon = getChannelIcon(conv.channel);
+                      const isSelected = conv.id === selectedId;
+                      const lockedByOther = conv.isLocked && conv.lockedByAgentId !== agent?.id;
+                      const hasUnread = conv.unreadCount > 0;
+                      const isLive = conv.status === "open" && hasUnread;
+                      const lastMsgPreview = conv.lastMessage
+                        ? (conv.lastMessage.sender === "agent" ? `You: ${conv.lastMessage.content}` : conv.lastMessage.sender === "bot" ? `🤖 ${conv.lastMessage.content}` : conv.lastMessage.content)
+                        : conv.customer.phone ?? "—";
+                      return (
+                        <div
+                          key={conv.id}
+                          onClick={() => handleSelectConversation(conv.id)}
+                          className={`mx-2 mb-0.5 px-2.5 py-2 rounded-md cursor-pointer transition-colors flex items-center gap-2.5 group ${
+                            isSelected ? 'bg-white/20' : 'hover:bg-white/10'
+                          }`}
+                          data-testid={`conversation-item-${conv.id}`}
+                        >
+                          <div className="relative shrink-0">
+                            <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${
+                              conv.status === "open" ? "bg-red-500/60" : "bg-yellow-500/60"
+                            }`}>
+                              {conv.customer.name.charAt(0).toUpperCase()}
+                            </div>
+                            {isLive && !lockedByOther ? (
+                              <span className="absolute -bottom-0.5 -right-0.5 flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400 border-2 border-[#3F0E40]" />
+                              </span>
+                            ) : (
+                              <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#3F0E40] ${conv.status === "open" ? "bg-red-400/60" : "bg-yellow-400/60"}`} />
+                            )}
+                            {lockedByOther && (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="absolute -top-0.5 -right-0.5 h-3.5 w-3.5 flex items-center justify-center rounded-full bg-amber-400">
+                                    <Lock className="h-2 w-2 text-white" />
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>{conv.lockedByAgent?.name} is handling this</TooltipContent>
+                              </Tooltip>
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1">
+                              <span className={`text-[13px] truncate leading-none ${hasUnread ? 'text-white font-bold' : 'text-white/70 font-medium'}`}>
+                                {conv.customer.name}
+                              </span>
+                              <span className={`text-[11px] shrink-0 leading-none ${hasUnread ? 'text-white/80' : 'text-white/35'}`}>
+                                {conv.lastMessageAt ? format(new Date(conv.lastMessageAt), "HH:mm") : ""}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-1 mt-0.5">
+                              <span className={`text-[12px] truncate leading-none ${hasUnread ? 'text-white/80' : 'text-white/45'}`}>
+                                <Icon className={`h-2.5 w-2.5 inline mr-0.5 ${getChannelColor(conv.channel)}`} />
+                                {lockedByOther
+                                  ? <span className="text-amber-300"><Lock className="h-2.5 w-2.5 inline" /> {conv.lockedByAgent?.name}</span>
+                                  : lastMsgPreview
+                                }
+                              </span>
+                              {hasUnread && (
+                                <span className={`shrink-0 h-4 min-w-[16px] rounded-full bg-white text-[#3F0E40] text-[10px] font-bold flex items-center justify-center px-1 ${isLive ? 'animate-pulse' : ''}`}>
+                                  {conv.unreadCount}
+                                </span>
+                              )}
+                            </div>
+                            {conv.followUpAt && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-amber-300 mt-0.5">
+                                <CalendarClock className="h-2.5 w-2.5" />
+                                {format(new Date(conv.followUpAt), "MMM d")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </>
+          )}
+
+          {/* All Conversations Tab */}
           {tab === "active" && (
             <>
               {convLoading && <div className="flex justify-center py-8"><Loader2 className="h-4 w-4 animate-spin text-white/40" /></div>}
@@ -528,7 +646,7 @@ export default function Inbox() {
       </div>
 
       {/* Right Panel */}
-      {tab === "active" && selectedConv ? (
+      {(tab === "active" || tab === "queue") && selectedConv ? (
         <div className="flex-1 flex flex-col bg-background min-w-0">
           {/* Lock Conflict Warning */}
           {lockConflict && (
@@ -917,8 +1035,13 @@ export default function Inbox() {
       ) : (
         <div className="flex-1 flex items-center justify-center bg-muted/10">
           <div className="text-center text-muted-foreground">
-            {tab === "closed" ? <Archive className="h-12 w-12 mx-auto mb-4 opacity-20" /> : <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-20" />}
-            <p>{tab === "closed" ? "Select a closed conversation to view" : "Select a conversation to start chatting"}</p>
+            {tab === "closed"
+              ? <Archive className="h-12 w-12 mx-auto mb-4 opacity-20" />
+              : tab === "queue"
+              ? <ListOrdered className="h-12 w-12 mx-auto mb-4 opacity-20" />
+              : <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-20" />
+            }
+            <p className="text-sm">{tab === "closed" ? "Select a closed conversation to view" : tab === "queue" ? "Select a chat from the queue" : "Select a conversation to start chatting"}</p>
           </div>
         </div>
       )}

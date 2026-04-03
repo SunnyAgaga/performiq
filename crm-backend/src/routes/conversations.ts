@@ -19,7 +19,10 @@ router.get("/conversations", requireAuth, async (req: AuthRequest, res) => {
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
     const where: Record<string, unknown> = {};
-    if (status && status !== "all") where.status = status;
+    if (status && status !== "all") {
+      const statuses = status.split(",").map((s) => s.trim()).filter(Boolean);
+      where.status = statuses.length === 1 ? statuses[0] : { [Op.in]: statuses };
+    }
     if (channel) where.channel = channel;
 
     const customerWhere: Record<string, unknown> = {};
