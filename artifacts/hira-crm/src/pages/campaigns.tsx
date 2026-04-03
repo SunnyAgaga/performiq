@@ -1,22 +1,59 @@
-import React, { useState } from "react";
-import { campaigns, getChannelIcon, getChannelColor } from "@/lib/mock-data";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { getChannelIcon, getChannelColor } from "@/lib/mock-data";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Megaphone, Calendar, Send, BarChart2 } from "lucide-react";
+import { Plus, Search, Megaphone, Calendar, Send, BarChart2, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { apiGet, apiPost } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+
+interface ApiCampaign {
+  id: number;
+  name: string;
+  channel: "whatsapp" | "facebook" | "instagram";
+  status: "draft" | "scheduled" | "sent";
+  message: string;
+  recipients: number;
+  sentAt: string | null;
+  scheduledAt: string | null;
+  openRate: number;
+  clickRate: number;
+}
 
 export default function Campaigns() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const [searchQuery, setSearchQuery] = useState("");
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newChannel, setNewChannel] = useState("whatsapp");
+  const [newMessage, setNewMessage] = useState("");
 
-  const filteredCampaigns = campaigns.filter(c => 
+  const { data: campaigns = [], isLoading } = useQuery<ApiCampaign[]>({
+    queryKey: ["campaigns"],
+    queryFn: () => apiGet("/campaigns"),
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (data: { name: string; channel: string; message: string; status: string }) =>
+      apiPost("/campaigns", data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["campaigns"] });
+      setIsNewOpen(false);
+      setNewName(""); setNewChannel("whatsapp"); setNewMessage("");
+      toast({ title: "Campaign created", description: "Your campaign has been saved." });
+    },
+  });
+
+  const filteredCampaigns = campaigns.filter((c) =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -29,6 +66,11 @@ export default function Campaigns() {
     }
   };
 
+  const sentCampaigns = campaigns.filter((c) => c.status === "sent");
+  const avgOpenRate = sentCampaigns.length > 0
+    ? (sentCampaigns.reduce((s, c) => s + c.openRate, 0) / sentCampaigns.length).toFixed(1)
+    : "0.0";
+
   return (
     <div className="p-8 h-full flex flex-col">
       <div className="flex items-center justify-between mb-8 shrink-0">
@@ -36,7 +78,7 @@ export default function Campaigns() {
           <h1 className="text-3xl font-bold tracking-tight">Campaigns</h1>
           <p className="text-muted-foreground mt-1">Broadcast messages to your customer segments.</p>
         </div>
-        
+
         <Dialog open={isNewOpen} onOpenChange={setIsNewOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2" data-testid="button-new-campaign">
@@ -46,22 +88,18 @@ export default function Campaigns() {
           <DialogContent className="sm:max-w-[600px]">
             <DialogHeader>
               <DialogTitle>Create Broadcast Campaign</DialogTitle>
-              <DialogDescription>
-                Send a mass message to your customers across channels.
-              </DialogDescription>
+              <DialogDescription>Send a mass message to your customers across channels.</DialogDescription>
             </DialogHeader>
             <div className="grid gap-6 py-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Campaign Name</Label>
-                <Input id="name" placeholder="e.g. Summer Sale 2024" />
+                <Input id="name" placeholder="e.g. Summer Sale 2024" value={newName} onChange={(e) => setNewName(e.target.value)} data-testid="input-campaign-name" />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Channel</Label>
-                  <Select defaultValue="whatsapp">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Select value={newChannel} onValueChange={setNewChannel}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="whatsapp">WhatsApp</SelectItem>
                       <SelectItem value="facebook">Facebook Messenger</SelectItem>
@@ -72,9 +110,7 @@ export default function Campaigns() {
                 <div className="space-y-2">
                   <Label>Target Audience</Label>
                   <Select defaultValue="all">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Customers</SelectItem>
                       <SelectItem value="vip">VIP Segment</SelectItem>
@@ -85,21 +121,26 @@ export default function Campaigns() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="message">Message Content</Label>
-                <Textarea 
-                  id="message" 
-                  placeholder="Type your message here. Use variables like {{name}} for personalization." 
+                <Textarea
+                  id="message"
+                  placeholder="Type your message here. Use variables like {{name}} for personalization."
                   className="min-h-[150px] resize-none"
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  data-testid="textarea-campaign-message"
                 />
               </div>
             </div>
             <DialogFooter className="flex justify-between sm:justify-between">
-              <Button variant="outline" onClick={() => setIsNewOpen(false)}>Save Draft</Button>
+              <Button variant="outline" onClick={() => createMutation.mutate({ name: newName, channel: newChannel, message: newMessage, status: "draft" })} disabled={!newName || !newMessage}>
+                Save Draft
+              </Button>
               <div className="flex gap-2">
-                <Button variant="secondary" className="gap-2">
+                <Button variant="secondary" className="gap-2" disabled={!newName || !newMessage} onClick={() => createMutation.mutate({ name: newName, channel: newChannel, message: newMessage, status: "scheduled" })}>
                   <Calendar className="h-4 w-4" /> Schedule
                 </Button>
-                <Button className="gap-2" onClick={() => setIsNewOpen(false)}>
-                  <Send className="h-4 w-4" /> Send Now
+                <Button className="gap-2" disabled={!newName || !newMessage || createMutation.isPending} onClick={() => createMutation.mutate({ name: newName, channel: newChannel, message: newMessage, status: "draft" })}>
+                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Send className="h-4 w-4" /> Send Now</>}
                 </Button>
               </div>
             </DialogFooter>
@@ -112,7 +153,7 @@ export default function Campaigns() {
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">Total Sent</p>
-              <h3 className="text-2xl font-bold">124</h3>
+              <h3 className="text-2xl font-bold">{sentCampaigns.length}</h3>
             </div>
             <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center text-primary">
               <Megaphone className="h-6 w-6" />
@@ -123,7 +164,7 @@ export default function Campaigns() {
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">Avg Open Rate</p>
-              <h3 className="text-2xl font-bold">64.2%</h3>
+              <h3 className="text-2xl font-bold">{avgOpenRate}%</h3>
             </div>
             <div className="h-12 w-12 bg-green-100 rounded-full flex items-center justify-center text-green-600">
               <BarChart2 className="h-6 w-6" />
@@ -134,7 +175,7 @@ export default function Campaigns() {
           <CardContent className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-muted-foreground mb-1">Active Scheduled</p>
-              <h3 className="text-2xl font-bold">3</h3>
+              <h3 className="text-2xl font-bold">{campaigns.filter((c) => c.status === "scheduled").length}</h3>
             </div>
             <div className="h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
               <Calendar className="h-6 w-6" />
@@ -147,16 +188,10 @@ export default function Campaigns() {
         <div className="p-4 border-b flex items-center justify-between shrink-0 bg-muted/20">
           <div className="relative w-80">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search campaigns..."
-              className="pl-9 bg-background"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              data-testid="input-search-campaigns"
-            />
+            <Input placeholder="Search campaigns..." className="pl-9 bg-background" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} data-testid="input-search-campaigns" />
           </div>
         </div>
-        
+
         <div className="flex-1 overflow-auto">
           <Table>
             <TableHeader className="bg-muted/50 sticky top-0 z-10">
@@ -172,7 +207,9 @@ export default function Campaigns() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCampaigns.map((campaign) => {
+              {isLoading ? (
+                <TableRow><TableCell colSpan={8} className="text-center py-12"><Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+              ) : filteredCampaigns.map((campaign) => {
                 const Icon = getChannelIcon(campaign.channel);
                 return (
                   <TableRow key={campaign.id} data-testid={`campaign-row-${campaign.id}`}>
@@ -188,20 +225,15 @@ export default function Campaigns() {
                       {campaign.sentAt ? format(new Date(campaign.sentAt), "MMM d, yyyy") : "—"}
                     </TableCell>
                     <TableCell className="text-right text-sm">{campaign.recipients.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-sm">
-                      {campaign.status === 'sent' ? `${campaign.openRate}%` : '—'}
-                    </TableCell>
-                    <TableCell className="text-right text-sm">
-                      {campaign.status === 'sent' ? `${campaign.clickRate}%` : '—'}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
-                        View
-                      </Button>
-                    </TableCell>
+                    <TableCell className="text-right text-sm">{campaign.status === 'sent' ? `${campaign.openRate}%` : '—'}</TableCell>
+                    <TableCell className="text-right text-sm">{campaign.status === 'sent' ? `${campaign.clickRate}%` : '—'}</TableCell>
+                    <TableCell className="text-right"><Button variant="ghost" size="sm">View</Button></TableCell>
                   </TableRow>
                 );
               })}
+              {!isLoading && filteredCampaigns.length === 0 && (
+                <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No campaigns found</TableCell></TableRow>
+              )}
             </TableBody>
           </Table>
         </div>

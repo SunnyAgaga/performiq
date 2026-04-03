@@ -1,0 +1,22 @@
+import { Router } from "express";
+import authRouter from "./auth.js";
+import conversationsRouter from "./conversations.js";
+import customersRouter from "./customers.js";
+import campaignsRouter from "./campaigns.js";
+import agentsRouter from "./agents.js";
+import dashboardRouter from "./dashboard.js";
+import analyticsRouter from "./analytics.js";
+
+const router = Router();
+
+router.get("/health", (_req, res) => res.json({ status: "ok", service: "hira-crm" }));
+
+router.use(authRouter);
+router.use(conversationsRouter);
+router.use(customersRouter);
+router.use(campaignsRouter);
+router.use(agentsRouter);
+router.use(dashboardRouter);
+router.use(analyticsRouter);
+
+export default router;

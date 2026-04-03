@@ -1,11 +1,12 @@
-import React from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { conversations, getChannelIcon, getChannelColor, getStatusColor } from "@/lib/mock-data";
-import { AreaChart, Area, XChart, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, PieChart, Pie, Cell } from "recharts";
-import { MessageSquare, Clock, CheckCircle2, TrendingUp } from "lucide-react";
+import { getChannelIcon, getChannelColor, getStatusColor } from "@/lib/mock-data";
+import { AreaChart, Area, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, XAxis, PieChart, Pie, Cell } from "recharts";
+import { MessageSquare, Clock, CheckCircle2, TrendingUp, Loader2 } from "lucide-react";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { apiGet } from "@/lib/api";
 
 const volumeData = [
   { name: 'Mon', whatsapp: 400, facebook: 240, instagram: 150 },
@@ -17,14 +18,42 @@ const volumeData = [
   { name: 'Sun', whatsapp: 210, facebook: 150, instagram: 380 },
 ];
 
-const channelData = [
-  { name: 'WhatsApp', value: 55, color: '#25D366' },
-  { name: 'Facebook', value: 30, color: '#1877F2' },
-  { name: 'Instagram', value: 15, color: '#E4405F' },
-];
+const CHANNEL_COLORS: Record<string, string> = { whatsapp: '#25D366', facebook: '#1877F2', instagram: '#E4405F' };
+const CHANNEL_LABELS: Record<string, string> = { whatsapp: 'WhatsApp', facebook: 'Facebook', instagram: 'Instagram' };
+
+interface DashboardData {
+  kpis: {
+    openConversations: number;
+    pendingConversations: number;
+    resolvedToday: number;
+    totalCustomers: number;
+    agentsOnline: number;
+    resolutionRate: number;
+    avgResponseMinutes: number;
+    csatScore: number;
+  };
+  channelBreakdown: Array<{ channel: string; count: number }>;
+  recentActivity: Array<{
+    id: number;
+    channel: string;
+    status: string;
+    lastMessageAt: string;
+    customer: { name: string; channel: string };
+  }>;
+}
 
 export default function Dashboard() {
-  const recentConversations = conversations.slice(0, 4);
+  const { data, isLoading } = useQuery<DashboardData>({
+    queryKey: ["dashboard"],
+    queryFn: () => apiGet("/dashboard"),
+    refetchInterval: 30000,
+  });
+
+  const channelData = (data?.channelBreakdown ?? []).map((r) => ({
+    name: CHANNEL_LABELS[r.channel] ?? r.channel,
+    value: r.count,
+    color: CHANNEL_COLORS[r.channel] ?? '#888',
+  }));
 
   return (
     <div className="p-8 space-y-6">
@@ -33,58 +62,50 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground mt-1">Here's what's happening with your team today.</p>
         </div>
+        {isLoading && <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />}
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <Card data-testid="kpi-open-conversations">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Conversations</CardTitle>
+            <CardTitle className="text-sm font-medium">Open Conversations</CardTitle>
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,248</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center text-green-600">
-              <TrendingUp className="h-3 w-3 mr-1" />
-              +12% from yesterday
-            </p>
+            <div className="text-2xl font-bold">{data?.kpis.openConversations ?? "—"}</div>
+            <p className="text-xs text-muted-foreground mt-1">{data?.kpis.pendingConversations ?? 0} pending</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card data-testid="kpi-response-time">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Avg Response Time</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2m 14s</div>
+            <div className="text-2xl font-bold">{data ? `${data.kpis.avgResponseMinutes}m` : "—"}</div>
             <p className="text-xs text-muted-foreground mt-1 flex items-center text-green-600">
-              <TrendingUp className="h-3 w-3 mr-1" />
-              -18s from yesterday
+              <TrendingUp className="h-3 w-3 mr-1" /> On track
             </p>
           </CardContent>
         </Card>
-        <Card>
+        <Card data-testid="kpi-resolution-rate">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Resolution Rate</CardTitle>
             <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">89.4%</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center text-green-600">
-              <TrendingUp className="h-3 w-3 mr-1" />
-              +2.1% from yesterday
-            </p>
+            <div className="text-2xl font-bold">{data ? `${data.kpis.resolutionRate}%` : "—"}</div>
+            <p className="text-xs text-muted-foreground mt-1">{data?.kpis.resolvedToday ?? 0} resolved today</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card data-testid="kpi-csat">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">CSAT Score</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">4.8/5.0</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center text-gray-500">
-              No change from yesterday
-            </p>
+            <div className="text-2xl font-bold">{data ? `${data.kpis.csatScore}/5.0` : "—"}</div>
+            <p className="text-xs text-muted-foreground mt-1">{data?.kpis.totalCustomers ?? 0} total customers</p>
           </CardContent>
         </Card>
       </div>
@@ -110,10 +131,7 @@ export default function Dashboard() {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                  itemStyle={{ color: 'hsl(var(--foreground))' }}
-                />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }} itemStyle={{ color: 'hsl(var(--foreground))' }} />
                 <Area type="monotone" dataKey="whatsapp" stroke="#25D366" strokeWidth={2} fillOpacity={1} fill="url(#colorWa)" />
                 <Area type="monotone" dataKey="facebook" stroke="#1877F2" strokeWidth={2} fillOpacity={1} fill="url(#colorFb)" />
               </AreaChart>
@@ -127,22 +145,12 @@ export default function Dashboard() {
           <CardContent className="h-[300px] flex flex-col items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={channelData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {channelData.map((entry, index) => (
+                <Pie data={channelData.length ? channelData : [{ name: 'No data', value: 1, color: '#e5e7eb' }]} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={2} dataKey="value">
+                  {(channelData.length ? channelData : [{ name: 'No data', value: 1, color: '#e5e7eb' }]).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip 
-                  contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                />
+                <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--card))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }} />
               </PieChart>
             </ResponsiveContainer>
             <div className="flex gap-4 mt-4 w-full justify-center text-sm">
@@ -167,35 +175,40 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentConversations.map((conv) => {
-                const Icon = getChannelIcon(conv.channel);
+              {isLoading ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+              ) : (data?.recentActivity ?? []).map((conv) => {
+                const Icon = getChannelIcon(conv.channel as "whatsapp" | "facebook" | "instagram");
                 return (
                   <div key={conv.id} className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-muted/50 transition-colors" data-testid={`activity-item-${conv.id}`}>
                     <div className="flex items-center gap-4">
                       <div className="relative">
-                        <img src={conv.customer.avatar} alt={conv.customer.name} className="h-10 w-10 rounded-full object-cover" />
-                        <div className={`absolute -bottom-1 -right-1 bg-white dark:bg-black rounded-full p-0.5`}>
-                          <Icon className={`h-3.5 w-3.5 ${getChannelColor(conv.channel)}`} />
+                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center text-base font-semibold">
+                          {conv.customer.name.charAt(0)}
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 bg-white dark:bg-black rounded-full p-0.5">
+                          <Icon className={`h-3.5 w-3.5 ${getChannelColor(conv.channel as "whatsapp" | "facebook" | "instagram")}`} />
                         </div>
                       </div>
                       <div>
                         <div className="font-medium">{conv.customer.name}</div>
-                        <div className="text-sm text-muted-foreground truncate max-w-[300px]">
-                          {conv.messages[conv.messages.length - 1]?.content || "Started a conversation"}
-                        </div>
+                        <div className="text-sm text-muted-foreground capitalize">{conv.channel} conversation</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
-                      <Badge variant="secondary" className={getStatusColor(conv.status)}>
+                      <Badge variant="secondary" className={getStatusColor(conv.status as "open" | "pending" | "resolved" | "closed")}>
                         {conv.status.charAt(0).toUpperCase() + conv.status.slice(1)}
                       </Badge>
                       <div className="text-sm text-muted-foreground w-20 text-right">
-                        {formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: true, includeSeconds: false }).replace('about ', '')}
+                        {conv.lastMessageAt ? formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: true, includeSeconds: false }).replace('about ', '') : 'recently'}
                       </div>
                     </div>
                   </div>
                 );
               })}
+              {!isLoading && (data?.recentActivity ?? []).length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">No recent activity</div>
+              )}
             </div>
           </CardContent>
         </Card>

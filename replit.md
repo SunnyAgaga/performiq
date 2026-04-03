@@ -31,32 +31,80 @@ Email notifications are planned but not yet implemented. The feature requires an
 ## Structure
 
 ```text
-performiq/
-├── frontend/               # React + Vite web application (@workspace/performiq)
-│   └── src/
-│       ├── lib/            # Self-contained API client (React Query hooks + fetch)
-│       │   ├── custom-fetch.ts
-│       │   ├── index.ts
-│       │   └── generated/ # API types and hooks
-│       ├── hooks/          # App-level React hooks (auth, etc.)
-│       ├── pages/          # Route-level page components
-│       └── components/     # Shared UI components
-├── backend/                # Express API server (@workspace/api-server)
-│   ├── src/
-│   │   ├── db/             # Self-contained database layer (Drizzle + schema)
-│   │   │   ├── index.ts    # Pool + Drizzle instance
-│   │   │   └── schema/     # Table definitions per domain
-│   │   └── routes/         # Express route handlers
-│   └── drizzle.config.ts   # Drizzle Kit config (points to src/db/schema)
-├── README.md               # Project documentation
-├── .gitignore
-├── pnpm-workspace.yaml     # pnpm workspace (frontend, backend)
+workspace/
+├── frontend/               # PerformIQ — React + Vite web application (@workspace/performiq)
+├── backend/                # PerformIQ — Express API server (@workspace/api-server)
+├── artifacts/hira-crm/     # HiraCRM — React + Vite web application (@workspace/hira-crm)
+├── crm-backend/            # HiraCRM — Express + Sequelize API server (@workspace/crm-backend)
+├── pnpm-workspace.yaml     # pnpm workspace (frontend, backend, artifacts/*, crm-backend)
 ├── tsconfig.base.json      # Shared TS options
-├── tsconfig.json           # Root TS project references
 └── package.json            # Root package with hoisted devDeps
 ```
 
-## Packages
+### PerformIQ (`frontend/` + `backend/`)
+
+```text
+frontend/src/
+├── lib/            # API client (React Query hooks + fetch)
+├── hooks/          # App-level React hooks (auth, etc.)
+├── pages/          # Route-level page components
+└── components/     # Shared UI components
+
+backend/src/
+├── db/             # Drizzle ORM + schema tables
+└── routes/         # Express route handlers
+```
+
+### HiraCRM (`artifacts/hira-crm/` + `crm-backend/`)
+
+```text
+artifacts/hira-crm/src/
+├── lib/
+│   ├── api.ts          # JWT fetch wrapper, apiGet/apiPost/apiPut/apiDelete
+│   ├── auth-context.tsx # AuthProvider + useAuth hook
+│   └── mock-data.ts    # Type definitions + channel icon/color utilities
+├── pages/
+│   ├── login.tsx       # Login page (pre-filled demo credentials)
+│   ├── dashboard.tsx   # KPI cards + charts from /api/dashboard
+│   ├── inbox.tsx       # Conversation list + message thread + send reply
+│   ├── customers.tsx   # Customer table + side sheet details
+│   ├── campaigns.tsx   # Campaign table + create dialog
+│   ├── analytics.tsx   # Charts + agent leaderboard from /api/analytics
+│   └── settings.tsx    # Channels, AI config, team management
+└── components/layout.tsx # Sidebar navigation
+
+crm-backend/src/
+├── models/         # Sequelize models (Agent, Customer, Conversation, Message, Campaign)
+├── routes/         # auth, agents, customers, conversations, campaigns, dashboard, analytics
+├── middlewares/    # JWT auth middleware
+└── seeds.ts        # Seed data (5 agents, 5 customers, conversations, messages, campaigns)
+```
+
+## HiraCRM
+
+### Ports
+- Frontend dev server: port 3001 (preview path: `/crm/`)
+- CRM API backend: port 3002 (internal only, proxied via Vite at `/crm/api`)
+
+### API Routing
+The Vite proxy rewrites `/crm/api/*` → `http://localhost:3002/api/*` at dev time. All API calls in the frontend use `${BASE_URL}api/...` (e.g. `/crm/api/auth/login`).
+
+### CRM Demo Accounts (password: `password`)
+- `sarah@hiracrm.com` — admin
+- `james@hiracrm.com` — agent
+- `priya@hiracrm.com` — agent
+- `carlos@hiracrm.com` — agent
+- `aisha@hiracrm.com` — agent
+
+### CRM Backend Commands
+- `pnpm --filter @workspace/crm-backend run dev` — build + start (port 3002)
+- `pnpm --filter @workspace/crm-backend run build` — esbuild bundle to `dist/index.mjs`
+- Database: shared PostgreSQL `DATABASE_URL` with Sequelize ORM (auto-sync on start)
+- JWT secret: `CRM_JWT_SECRET` env var (falls back to a hardcoded dev secret)
+
+---
+
+## PerformIQ Packages
 
 ### `frontend` (`@workspace/performiq`)
 

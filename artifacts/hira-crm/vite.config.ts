@@ -60,6 +60,13 @@ export default defineConfig({
     port,
     host: "0.0.0.0",
     allowedHosts: true,
+    proxy: {
+      "/crm/api": {
+        target: "http://localhost:3002",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/crm/, ""),
+      },
+    },
     fs: {
       strict: true,
       deny: ["**/.*"],
