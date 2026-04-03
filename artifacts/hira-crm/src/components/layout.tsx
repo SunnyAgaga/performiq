@@ -11,6 +11,7 @@ import {
   LogOut,
   Bot,
   Plug,
+  ShieldCheck,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,10 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: "Campaigns", href: "/campaigns", icon: Megaphone, group: "core" },
     { name: "Analytics", href: "/analytics", icon: LineChart, group: "core" },
   ];
+
+  const adminNav = agent?.role === "admin"
+    ? [{ name: "User Management", href: "/admin", icon: ShieldCheck }]
+    : [];
 
   const toolsNav = [
     { name: "AI Chat", href: "/ai-chat", icon: Bot },
@@ -71,6 +76,30 @@ export default function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {adminNav.length > 0 && (
+            <>
+              <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2 mt-3">Admin</p>
+              {adminNav.map((item) => {
+                const isActive = location === item.href;
+                return (
+                  <Link key={item.name} href={item.href}>
+                    <div
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
+                        isActive
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      }`}
+                      data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span className="text-sm">{item.name}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </>
+          )}
 
           <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2 mt-3">Tools</p>
           {toolsNav.map((item) => {
@@ -121,7 +150,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <span className="text-foreground font-medium">
-                {[...navigation, ...toolsNav].find((n) => n.href === location)?.name ?? "CommsCRM"}
+                {[...navigation, ...adminNav, ...toolsNav].find((n) => n.href === location)?.name ?? "CommsCRM"}
               </span>
             </div>
           </div>

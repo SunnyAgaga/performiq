@@ -14,6 +14,7 @@ import Analytics from "@/pages/analytics";
 import Settings from "@/pages/settings";
 import Channels from "@/pages/channels";
 import AiChat from "@/pages/ai-chat";
+import Admin from "@/pages/admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -25,6 +26,18 @@ function PrivateRoute({ component: Component }: { component: React.ComponentType
   const { agent, isLoading } = useAuth();
   if (isLoading) return null;
   if (!agent) return <Redirect to="/login" />;
+  return (
+    <Layout>
+      <Component />
+    </Layout>
+  );
+}
+
+function AdminRoute({ component: Component }: { component: React.ComponentType }) {
+  const { agent, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!agent) return <Redirect to="/login" />;
+  if (agent.role !== "admin") return <Redirect to="/" />;
   return (
     <Layout>
       <Component />
@@ -44,6 +57,7 @@ function Router() {
       <Route path="/settings" component={() => <PrivateRoute component={Settings} />} />
       <Route path="/channels" component={() => <PrivateRoute component={Channels} />} />
       <Route path="/ai-chat" component={() => <PrivateRoute component={AiChat} />} />
+      <Route path="/admin" component={() => <AdminRoute component={Admin} />} />
       <Route component={NotFound} />
     </Switch>
   );
