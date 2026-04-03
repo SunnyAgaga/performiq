@@ -232,19 +232,49 @@ function StartWorkflowDialog({
 // ─── Workflow Detail Panel ────────────────────────────────────────────────────
 
 function WorkflowDetail({
-  workflow, users, canManage, onUpdate, onClose,
+  workflowInit, users, canManage, onUpdate, onClose,
 }: {
-  workflow: any;
+  workflowInit: any;
   users: any[];
   canManage: boolean;
   onUpdate: (wf: any) => void;
   onClose: () => void;
 }) {
   const { toast } = useToast();
+  const [workflow, setWorkflow] = useState<any>(workflowInit);
+  const [loading, setLoading] = useState(false);
   const [addingTask, setAddingTask] = useState(false);
   const [newTask, setNewTask] = useState({ title: "", description: "", category: "", assigneeId: "", dueDate: "" });
   const [updatingTaskId, setUpdatingTaskId] = useState<number | null>(null);
   const [expandedTask, setExpandedTask] = useState<number | null>(null);
+  const [editingTask, setEditingTask] = useState<number | null>(null);
+  const [taskDraft, setTaskDraft] = useState<any>({});
+  const [editingHeader, setEditingHeader] = useState(false);
+  const [headerDraft, setHeaderDraft] = useState({ title: "", notes: "", targetCompletionDate: "" });
+
+  // Fetch fresh workflow data from server
+  const refresh = useCallback(async (id: number) => {
+    setLoading(true);
+    try {
+      const res = await apiFetch(`/api/onboarding/workflows/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setWorkflow(data);
+        onUpdate(data);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refresh(workflowInit.id);
+  }, [workflowInit.id]);
+
+  const pushUpdate = (updated: any) => {
+    setWorkflow(updated);
+    onUpdate(updated);
+  };
 
   const updateTask = async (taskId: number, patch: any) => {
     setUpdatingTaskId(taskId);
@@ -253,7 +283,8 @@ function WorkflowDetail({
         method: "PATCH", body: JSON.stringify(patch),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      onUpdate(await res.json());
+      pushUpdate(await res.json());
+      setEditingTask(null);
     } catch (err: any) {
       toast({ title: err.message || "Failed to update task", variant: "destructive" });
     } finally {
@@ -266,7 +297,7 @@ function WorkflowDetail({
     try {
       const res = await apiFetch(`/api/onboarding/tasks/${taskId}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
-      onUpdate(await res.json());
+      pushUpdate(await res.json());
       toast({ title: "Task deleted" });
     } catch {
       toast({ title: "Failed to delete task", variant: "destructive" });
@@ -282,7 +313,7 @@ function WorkflowDetail({
         }),
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      onUpdate(await res.json());
+      pushUpdate(await res.json());
       setNewTask({ title: "", description: "", category: "", assigneeId: "", dueDate: "" });
       setAddingTask(false);
       toast({ title: "Task added" });
@@ -291,16 +322,17 @@ function WorkflowDetail({
     }
   };
 
-  const updateWorkflowStatus = async (status: string) => {
+  const updateWorkflowMeta = async (patch: any) => {
     try {
       const res = await apiFetch(`/api/onboarding/workflows/${workflow.id}`, {
-        method: "PUT", body: JSON.stringify({ status }),
+        method: "PUT", body: JSON.stringify(patch),
       });
       if (!res.ok) throw new Error();
-      onUpdate(await res.json());
-      toast({ title: `Workflow marked as ${status}` });
+      pushUpdate(await res.json());
+      setEditingHeader(false);
+      toast({ title: "Workflow updated" });
     } catch {
-      toast({ title: "Failed to update workflow status", variant: "destructive" });
+      toast({ title: "Failed to update workflow", variant: "destructive" });
     }
   };
 
@@ -311,123 +343,288 @@ function WorkflowDetail({
     groupedTasks[cat].push(t);
   });
 
+  const startEditTask = (task: any) => {
+    setEditingTask(task.id);
+    setTaskDraft({
+      title: task.title,
+      description: task.description || "",
+      category: task.category || "",
+      notes: task.notes || "",
+      dueDate: task.dueDate ? task.dueDate.split("T")[0] : "",
+      assigneeId: task.assigneeId ? String(task.assigneeId) : "",
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-sm">
       <div className="bg-background h-full w-full max-w-xl shadow-2xl flex flex-col overflow-hidden">
+
         {/* Header */}
-        <div className={`px-6 py-4 border-b border-border ${workflow.type === "onboarding" ? "bg-blue-50" : "bg-red-50"}`}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                {workflow.type === "onboarding"
-                  ? <UserPlus className="w-5 h-5 text-blue-600 shrink-0" />
-                  : <UserMinus className="w-5 h-5 text-red-600 shrink-0" />}
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${workflow.type === "onboarding" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>
-                  {workflow.type}
-                </span>
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
-                  workflow.status === "completed" ? "bg-green-100 text-green-700"
-                  : workflow.status === "cancelled" ? "bg-gray-100 text-gray-600"
-                  : "bg-primary/10 text-primary"}`}>
-                  {workflow.status}
-                </span>
+        <div className={`px-6 py-4 border-b border-border ${workflow.type === "onboarding" ? "bg-blue-50 dark:bg-blue-950/30" : "bg-red-50 dark:bg-red-950/30"}`}>
+          {editingHeader && canManage ? (
+            <div className="space-y-2">
+              <input
+                value={headerDraft.title}
+                onChange={e => setHeaderDraft(p => ({ ...p, title: e.target.value }))}
+                className="w-full px-3 py-1.5 rounded-lg border border-border bg-background text-sm font-semibold outline-none"
+                placeholder="Workflow title"
+              />
+              <textarea
+                value={headerDraft.notes}
+                onChange={e => setHeaderDraft(p => ({ ...p, notes: e.target.value }))}
+                rows={2}
+                className="w-full px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none resize-none"
+                placeholder="Notes (optional)"
+              />
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground shrink-0">Target date:</label>
+                <input
+                  type="date"
+                  value={headerDraft.targetCompletionDate}
+                  onChange={e => setHeaderDraft(p => ({ ...p, targetCompletionDate: e.target.value }))}
+                  className="flex-1 px-2 py-1 rounded-lg border border-border bg-background text-xs outline-none"
+                />
               </div>
-              <h2 className="text-lg font-bold truncate">{workflow.title}</h2>
-              <p className="text-sm text-muted-foreground">{workflow.employee?.name} · Started by {workflow.startedBy?.name}</p>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setEditingHeader(false)}
+                  className="flex-1 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted">Cancel</button>
+                <button onClick={() => updateWorkflowMeta({
+                  title: headerDraft.title,
+                  notes: headerDraft.notes || null,
+                  targetCompletionDate: headerDraft.targetCompletionDate || null,
+                })} className="flex-1 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90">
+                  Save Changes
+                </button>
+              </div>
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted shrink-0"><X className="w-5 h-5" /></button>
-          </div>
+          ) : (
+            <>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    {workflow.type === "onboarding"
+                      ? <UserPlus className="w-5 h-5 text-blue-600 shrink-0" />
+                      : <UserMinus className="w-5 h-5 text-red-600 shrink-0" />}
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${workflow.type === "onboarding" ? "bg-blue-100 text-blue-700" : "bg-red-100 text-red-700"}`}>
+                      {workflow.type}
+                    </span>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${
+                      workflow.status === "completed" ? "bg-green-100 text-green-700"
+                      : workflow.status === "cancelled" ? "bg-gray-100 text-gray-600"
+                      : "bg-primary/10 text-primary"}`}>
+                      {workflow.status}
+                    </span>
+                  </div>
+                  <h2 className="text-lg font-bold">{workflow.title}</h2>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {workflow.employee?.name}
+                    {workflow.startedBy?.name && ` · Started by ${workflow.startedBy.name}`}
+                  </p>
+                  {workflow.notes && <p className="text-xs text-muted-foreground italic mt-1">{workflow.notes}</p>}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {canManage && (
+                    <button onClick={() => {
+                      setHeaderDraft({
+                        title: workflow.title,
+                        notes: workflow.notes || "",
+                        targetCompletionDate: workflow.targetCompletionDate ? workflow.targetCompletionDate.split("T")[0] : "",
+                      });
+                      setEditingHeader(true);
+                    }} className="p-1.5 rounded-lg hover:bg-muted/60 text-muted-foreground" title="Edit workflow">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  <button onClick={() => refresh(workflow.id)} className="p-1.5 rounded-lg hover:bg-muted/60 text-muted-foreground" title="Refresh">
+                    <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+                  </button>
+                  <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted/60"><X className="w-5 h-5" /></button>
+                </div>
+              </div>
 
-          {/* Progress */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-muted-foreground">{workflow.completedTasks}/{workflow.totalTasks} tasks done</span>
-              <span className="text-xs font-bold text-primary">{workflow.progress}%</span>
-            </div>
-            <ProgressBar value={workflow.progress} />
-          </div>
+              {/* Progress */}
+              <div className="mt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-muted-foreground">
+                    {workflow.completedTasks}/{workflow.totalTasks} tasks done
+                  </span>
+                  <span className="text-xs font-bold text-primary">{workflow.progress}%</span>
+                </div>
+                <ProgressBar value={workflow.progress ?? 0} />
+              </div>
 
-          {workflow.targetCompletionDate && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Target: {format(new Date(workflow.targetCompletionDate), "MMM d, yyyy")}
-            </p>
+              {workflow.targetCompletionDate && (
+                <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  Target: {format(new Date(workflow.targetCompletionDate), "MMM d, yyyy")}
+                </p>
+              )}
+            </>
           )}
         </div>
 
         {/* Tasks */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {Object.keys(groupedTasks).length === 0 && (
+          {loading && (workflow.tasks || []).length === 0 && (
             <div className="text-center text-muted-foreground py-12">
-              <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
-              <p>No tasks in this workflow.</p>
+              <RefreshCw className="w-8 h-8 mx-auto mb-2 opacity-30 animate-spin" />
+              <p className="text-sm">Loading tasks…</p>
             </div>
           )}
+          {!loading && Object.keys(groupedTasks).length === 0 && (
+            <div className="text-center text-muted-foreground py-12">
+              <FileText className="w-12 h-12 mx-auto mb-3 opacity-30" />
+              <p>No tasks in this workflow yet.</p>
+              {canManage && workflow.status === "active" && (
+                <button onClick={() => setAddingTask(true)}
+                  className="mt-3 text-sm text-primary hover:underline">Add the first task</button>
+              )}
+            </div>
+          )}
+
           {Object.entries(groupedTasks).map(([category, catTasks]) => (
             <div key={category}>
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1">{category}</h4>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 px-1 flex items-center gap-2">
+                <span className={`inline-block w-2 h-2 rounded-full ${CATEGORY_COLORS[category]?.includes("purple") ? "bg-purple-400" : CATEGORY_COLORS[category]?.includes("blue") ? "bg-blue-400" : CATEGORY_COLORS[category]?.includes("green") ? "bg-green-400" : "bg-gray-400"}`} />
+                {category}
+                <span className="font-normal opacity-60">({catTasks.filter(t => t.status === "completed" || t.status === "skipped").length}/{catTasks.length})</span>
+              </h4>
               <div className="space-y-2">
                 {catTasks.map((task: any) => {
                   const cfg = TASK_STATUS_CONFIG[task.status as keyof typeof TASK_STATUS_CONFIG] ?? TASK_STATUS_CONFIG.pending;
                   const Icon = cfg.icon;
                   const isExpanded = expandedTask === task.id;
+                  const isEditing = editingTask === task.id;
+
                   return (
                     <div key={task.id} className="border border-border rounded-xl bg-background overflow-hidden">
+                      {/* Row */}
                       <div
-                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30"
-                        onClick={() => setExpandedTask(isExpanded ? null : task.id)}
+                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors"
+                        onClick={() => {
+                          if (isExpanded) { setExpandedTask(null); setEditingTask(null); }
+                          else setExpandedTask(task.id);
+                        }}
                       >
-                        <Icon className={`w-4 h-4 shrink-0 ${task.status === "completed" ? "text-green-600" : task.status === "in_progress" ? "text-blue-600" : "text-muted-foreground"}`} />
+                        <Icon className={`w-4 h-4 shrink-0 ${task.status === "completed" ? "text-green-600" : task.status === "in_progress" ? "text-blue-600" : task.status === "skipped" ? "text-yellow-600" : "text-muted-foreground"}`} />
                         <div className="flex-1 min-w-0">
-                          <p className={`text-sm font-medium truncate ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
+                          <p className={`text-sm font-medium ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}>
                             {task.title}
                           </p>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             {task.assignee && <span className="text-xs text-muted-foreground">→ {task.assignee.name}</span>}
-                            {task.dueDate && <span className="text-xs text-muted-foreground">{format(new Date(task.dueDate), "MMM d")}</span>}
+                            {task.dueDate && (
+                              <span className={`text-xs ${new Date(task.dueDate) < new Date() && task.status !== "completed" ? "text-red-500 font-medium" : "text-muted-foreground"}`}>
+                                Due {format(new Date(task.dueDate), "MMM d")}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${cfg.color}`}>{cfg.label}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 font-medium ${cfg.color}`}>{cfg.label}</span>
                         {isExpanded ? <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0" /> : <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />}
                       </div>
 
+                      {/* Expanded area */}
                       {isExpanded && (
                         <div className="border-t border-border px-4 py-3 space-y-3 bg-muted/20">
-                          {task.description && <p className="text-sm text-muted-foreground">{task.description}</p>}
-                          {task.completedBy && (
-                            <p className="text-xs text-green-700">Completed by {task.completedBy.name}{task.completedAt ? ` on ${format(new Date(task.completedAt), "MMM d, yyyy")}` : ""}</p>
-                          )}
-                          {task.notes && <p className="text-xs italic text-muted-foreground">Note: {task.notes}</p>}
-
-                          {/* Status controls */}
-                          <div className="flex flex-wrap gap-2">
-                            {Object.entries(TASK_STATUS_CONFIG).map(([s, c]) => (
-                              <button key={s} disabled={updatingTaskId === task.id || task.status === s}
-                                onClick={() => updateTask(task.id, { status: s })}
-                                className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-all disabled:opacity-40 ${task.status === s ? c.color + " border-transparent" : "border-border hover:bg-muted"}`}>
-                                {c.label}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Assignee */}
-                          {canManage && (
-                            <select
-                              defaultValue={task.assigneeId ?? ""}
-                              onChange={e => updateTask(task.id, { assigneeId: e.target.value || null })}
-                              className="w-full px-3 py-1.5 text-sm rounded-lg border border-border bg-background outline-none"
-                            >
-                              <option value="">Unassigned</option>
-                              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                            </select>
-                          )}
-
-                          {canManage && (
-                            <div className="flex gap-2">
-                              <button onClick={() => deleteTask(task.id)}
-                                className="text-xs text-red-600 hover:underline flex items-center gap-1">
-                                <Trash2 className="w-3 h-3" /> Delete task
-                              </button>
+                          {isEditing ? (
+                            /* Edit mode */
+                            <div className="space-y-2">
+                              <input value={taskDraft.title}
+                                onChange={e => setTaskDraft((p: any) => ({ ...p, title: e.target.value }))}
+                                placeholder="Task title *"
+                                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none font-medium" />
+                              <textarea value={taskDraft.description}
+                                onChange={e => setTaskDraft((p: any) => ({ ...p, description: e.target.value }))}
+                                placeholder="Description"
+                                rows={2}
+                                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none resize-none" />
+                              <div className="grid grid-cols-2 gap-2">
+                                <input value={taskDraft.category}
+                                  onChange={e => setTaskDraft((p: any) => ({ ...p, category: e.target.value }))}
+                                  placeholder="Category"
+                                  className="px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none" />
+                                <input type="date" value={taskDraft.dueDate}
+                                  onChange={e => setTaskDraft((p: any) => ({ ...p, dueDate: e.target.value }))}
+                                  className="px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none" />
+                              </div>
+                              <select value={taskDraft.assigneeId}
+                                onChange={e => setTaskDraft((p: any) => ({ ...p, assigneeId: e.target.value }))}
+                                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none">
+                                <option value="">Unassigned</option>
+                                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                              </select>
+                              <textarea value={taskDraft.notes}
+                                onChange={e => setTaskDraft((p: any) => ({ ...p, notes: e.target.value }))}
+                                placeholder="Notes / comments"
+                                rows={2}
+                                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none resize-none" />
+                              <div className="flex gap-2 pt-1">
+                                <button onClick={() => setEditingTask(null)}
+                                  className="flex-1 py-1.5 rounded-lg border border-border text-xs font-medium hover:bg-muted">
+                                  Cancel
+                                </button>
+                                <button
+                                  disabled={!taskDraft.title.trim() || updatingTaskId === task.id}
+                                  onClick={() => updateTask(task.id, {
+                                    title: taskDraft.title,
+                                    description: taskDraft.description || null,
+                                    category: taskDraft.category || null,
+                                    dueDate: taskDraft.dueDate || null,
+                                    assigneeId: taskDraft.assigneeId || null,
+                                    notes: taskDraft.notes || null,
+                                  })}
+                                  className="flex-1 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50">
+                                  {updatingTaskId === task.id ? "Saving…" : "Save Task"}
+                                </button>
+                              </div>
                             </div>
+                          ) : (
+                            /* View mode */
+                            <>
+                              {task.description && <p className="text-sm text-muted-foreground">{task.description}</p>}
+                              {task.completedBy && (
+                                <p className="text-xs text-green-700 dark:text-green-400">
+                                  ✓ Completed by {task.completedBy.name}
+                                  {task.completedAt ? ` on ${format(new Date(task.completedAt), "MMM d, yyyy")}` : ""}
+                                </p>
+                              )}
+                              {task.notes && (
+                                <p className="text-xs italic text-muted-foreground bg-muted/60 rounded-lg px-3 py-2">
+                                  💬 {task.notes}
+                                </p>
+                              )}
+
+                              {/* Status buttons */}
+                              <div>
+                                <p className="text-xs font-medium text-muted-foreground mb-1.5">Update status:</p>
+                                <div className="flex flex-wrap gap-2">
+                                  {Object.entries(TASK_STATUS_CONFIG).map(([s, c]) => (
+                                    <button key={s}
+                                      disabled={updatingTaskId === task.id || task.status === s}
+                                      onClick={() => updateTask(task.id, { status: s })}
+                                      className={`text-xs px-3 py-1.5 rounded-full border font-medium transition-all disabled:opacity-40
+                                        ${task.status === s ? c.color + " border-transparent shadow-sm" : "border-border hover:bg-muted"}`}>
+                                      {c.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Edit / Delete */}
+                              {canManage && (
+                                <div className="flex items-center gap-3 pt-1 border-t border-border/50">
+                                  <button onClick={() => startEditTask(task)}
+                                    className="text-xs text-primary hover:underline flex items-center gap-1">
+                                    <Edit2 className="w-3 h-3" /> Edit task
+                                  </button>
+                                  <button onClick={() => deleteTask(task.id)}
+                                    className="text-xs text-red-600 hover:underline flex items-center gap-1">
+                                    <Trash2 className="w-3 h-3" /> Delete
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
                         </div>
                       )}
@@ -447,12 +644,13 @@ function WorkflowDetail({
                   <Plus className="w-4 h-4" /> Add custom task
                 </button>
               ) : (
-                <div className="border border-border rounded-xl p-4 space-y-3">
+                <div className="border border-border rounded-xl p-4 space-y-3 bg-muted/10">
                   <h4 className="font-semibold text-sm">New Task</h4>
                   <input value={newTask.title} onChange={e => setNewTask(p => ({ ...p, title: e.target.value }))}
                     placeholder="Task title *" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none" />
-                  <input value={newTask.description} onChange={e => setNewTask(p => ({ ...p, description: e.target.value }))}
-                    placeholder="Description (optional)" className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none" />
+                  <textarea value={newTask.description} onChange={e => setNewTask(p => ({ ...p, description: e.target.value }))}
+                    placeholder="Description (optional)" rows={2}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none resize-none" />
                   <div className="grid grid-cols-2 gap-2">
                     <input value={newTask.category} onChange={e => setNewTask(p => ({ ...p, category: e.target.value }))}
                       placeholder="Category" className="px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none" />
@@ -461,7 +659,7 @@ function WorkflowDetail({
                   </div>
                   <select value={newTask.assigneeId} onChange={e => setNewTask(p => ({ ...p, assigneeId: e.target.value }))}
                     className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none">
-                    <option value="">Assign to... (optional)</option>
+                    <option value="">Assign to… (optional)</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
                   <div className="flex gap-2">
@@ -477,13 +675,13 @@ function WorkflowDetail({
         {/* Footer actions */}
         {canManage && workflow.status === "active" && (
           <div className="border-t border-border px-4 py-3 flex gap-2">
-            <button onClick={() => updateWorkflowStatus("completed")}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700">
+            <button onClick={() => updateWorkflowMeta({ status: "completed" })}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 transition-colors">
               <CheckCircle2 className="w-4 h-4" /> Complete Workflow
             </button>
-            <button onClick={() => { if (confirm("Cancel this workflow?")) updateWorkflowStatus("cancelled"); }}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-muted">
-              <X className="w-4 h-4" /> Cancel Workflow
+            <button onClick={() => { if (confirm("Cancel this workflow?")) updateWorkflowMeta({ status: "cancelled" }); }}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition-colors">
+              <X className="w-4 h-4" /> Cancel
             </button>
           </div>
         )}
@@ -859,7 +1057,7 @@ export default function Onboarding() {
 
       {selectedWorkflow && (
         <WorkflowDetail
-          workflow={selectedWorkflow}
+          workflowInit={selectedWorkflow}
           users={users}
           canManage={canManage}
           onUpdate={handleWorkflowUpdate}
