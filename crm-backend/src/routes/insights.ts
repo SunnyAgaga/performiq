@@ -345,4 +345,207 @@ Return ONLY valid JSON, no markdown fences.`;
   }
 });
 
+// ── Product Demand Intelligence ───────────────────────────────────────────────
+
+// Phrases that indicate a customer is searching for / asking about a product
+const SEARCH_INTENT_TRIGGERS = [
+  "do you have", "do you sell", "do you carry", "do you stock",
+  "looking for", "searching for", "search for",
+  "can i get", "can i buy", "can i order",
+  "is there a", "is there any", "are there any",
+  "need a", "need an", "need some", "i need",
+  "want a", "want an", "want to buy", "want to order", "want to get",
+  "find me", "get me",
+  "price of", "price for", "how much is", "how much for", "how much does",
+  "availability of", "available", "in stock", "do you have in stock",
+  "where can i find", "where can i get",
+  "do you supply",
+];
+
+// Phrases in agent/bot messages indicating unavailability
+const NOT_AVAILABLE_TRIGGERS = [
+  "out of stock", "sold out", "not available", "no longer available",
+  "not in stock", "don't have", "do not have", "we don't stock",
+  "we don't carry", "not currently available", "currently unavailable",
+  "temporarily unavailable", "discontinued", "no stock",
+  "we don't sell", "we don't supply", "unfortunately we",
+  "we don't offer", "not something we",
+];
+
+function extractProductTerm(content: string, trigger: string): string | null {
+  const lower = content.toLowerCase();
+  const idx = lower.indexOf(trigger);
+  if (idx === -1) return null;
+  // Take up to 5 words after the trigger
+  const after = content.slice(idx + trigger.length).trim();
+  const words = after.split(/\s+/).slice(0, 5);
+  // Remove punctuation from last word
+  if (words.length === 0) return null;
+  const term = words.join(" ").replace(/[?.!,;]+$/, "").trim();
+  return term.length >= 3 ? term : null;
+}
+
+function normaliseTerm(term: string): string {
+  return term.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+}
+
+router.get("/insights/product-demand", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const days = parseInt((req.query.days as string) ?? "30");
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    since.setHours(0, 0, 0, 0);
+
+    // Fetch all customer messages in the period
+    const customerMessages = await Message.findAll({
+      where: { sender: "customer", createdAt: { [Op.gte]: since } },
+      attributes: ["id", "conversationId", "content", "createdAt"],
+      order: [["createdAt", "ASC"]],
+      limit: 8000,
+    }) as unknown as Array<{ id: number; conversationId: number; content: string; createdAt: Date }>;
+
+    // Fetch all agent/bot messages (for unavailability detection)
+    const agentMessages = await Message.findAll({
+      where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.gte]: since } },
+      attributes: ["id", "conversationId", "content", "createdAt"],
+      order: [["createdAt", "ASC"]],
+      limit: 8000,
+    }) as unknown as Array<{ id: number; conversationId: number; content: string; createdAt: Date }>;
+
+    // ── Detect product searches ─────────────────────────────────────────────
+    const searchEvents: Array<{ conversationId: number; term: string; date: Date }> = [];
+
+    for (const msg of customerMessages) {
+      const lower = msg.content.toLowerCase();
+      for (const trigger of SEARCH_INTENT_TRIGGERS) {
+        if (lower.includes(trigger)) {
+          const term = extractProductTerm(msg.content, trigger);
+          if (term) {
+            searchEvents.push({ conversationId: msg.conversationId, term, date: msg.createdAt });
+            break; // one search per message
+          }
+        }
+      }
+    }
+
+    // ── Detect not-available responses ─────────────────────────────────────
+    // A conversation is "not available" if an agent/bot message in a conversation that had
+    // a product search contains an unavailability phrase
+    const searchConversationIds = new Set(searchEvents.map((e) => e.conversationId));
+    const notAvailableConvIds = new Set<number>();
+    const notAvailableEvents: Array<{ date: Date }> = [];
+
+    for (const msg of agentMessages) {
+      if (!searchConversationIds.has(msg.conversationId)) continue;
+      const lower = msg.content.toLowerCase();
+      const isUnavailable = NOT_AVAILABLE_TRIGGERS.some((t) => lower.includes(t));
+      if (isUnavailable && !notAvailableConvIds.has(msg.conversationId)) {
+        notAvailableConvIds.add(msg.conversationId);
+        notAvailableEvents.push({ date: msg.createdAt });
+      }
+    }
+
+    // ── Resolved search conversations (proxy for search-to-order) ──────────
+    let resolvedSearchConvs = 0;
+    if (searchConversationIds.size > 0) {
+      const convIds = [...searchConversationIds];
+      const resolved = await Conversation.count({
+        where: { id: { [Op.in]: convIds }, status: "resolved" },
+      });
+      resolvedSearchConvs = resolved;
+    }
+
+    // ── Unique products in demand ───────────────────────────────────────────
+    const productFreq: Record<string, number> = {};
+    for (const ev of searchEvents) {
+      const key = normaliseTerm(ev.term);
+      if (key.length >= 3) {
+        productFreq[key] = (productFreq[key] ?? 0) + 1;
+      }
+    }
+
+    const topSearchedProducts = Object.entries(productFreq)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 20)
+      .map(([term, count]) => ({
+        term,
+        count,
+        notAvailableCount: notAvailableEvents.length,
+        display: term.split(" ").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" "),
+      }));
+
+    const uniqueProductCount = Object.keys(productFreq).length;
+    const totalSearches = searchEvents.length;
+    const notAvailableRate = totalSearches > 0
+      ? Math.round((notAvailableConvIds.size / searchConversationIds.size) * 1000) / 10
+      : 0;
+    const searchToOrderRate = searchConversationIds.size > 0
+      ? Math.round((resolvedSearchConvs / searchConversationIds.size) * 1000) / 10
+      : 0;
+
+    // ── Daily trend data ────────────────────────────────────────────────────
+    const dayMs = 86400000;
+    const trendMap: Record<string, { searches: number; notAvailable: number }> = {};
+
+    // Initialise all days in range
+    for (let d = 0; d < days; d++) {
+      const dt = new Date(since.getTime() + d * dayMs);
+      const key = dt.toISOString().slice(0, 10);
+      trendMap[key] = { searches: 0, notAvailable: 0 };
+    }
+
+    for (const ev of searchEvents) {
+      const key = new Date(ev.date).toISOString().slice(0, 10);
+      if (trendMap[key]) trendMap[key].searches++;
+    }
+
+    for (const ev of notAvailableEvents) {
+      const key = new Date(ev.date).toISOString().slice(0, 10);
+      if (trendMap[key]) trendMap[key].notAvailable++;
+    }
+
+    const trendData = Object.entries(trendMap).map(([date, counts]) => ({
+      date,
+      label: new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short" }),
+      ...counts,
+    }));
+
+    // ── Top categories / demand by channel ─────────────────────────────────
+    // For each product search, check which conversation channel it came from
+    const convChannels: Record<number, string> = {};
+    if (searchConversationIds.size > 0) {
+      const convs = await Conversation.findAll({
+        where: { id: { [Op.in]: [...searchConversationIds] } },
+        attributes: ["id", "channel"],
+        raw: true,
+      }) as unknown as Array<{ id: number; channel: string }>;
+      for (const c of convs) convChannels[c.id] = c.channel;
+    }
+
+    const channelBreakdown: Record<string, number> = {};
+    for (const ev of searchEvents) {
+      const ch = convChannels[ev.conversationId] ?? "unknown";
+      channelBreakdown[ch] = (channelBreakdown[ch] ?? 0) + 1;
+    }
+
+    res.json({
+      period: `Last ${days} days`,
+      stats: {
+        totalSearches,
+        uniqueProductCount,
+        notAvailableRate,
+        searchToOrderRate,
+        searchConversationCount: searchConversationIds.size,
+        notAvailableCount: notAvailableConvIds.size,
+      },
+      topSearchedProducts,
+      trendData,
+      channelBreakdown,
+    });
+  } catch (err) {
+    console.error("Product demand error:", err);
+    res.status(500).json({ error: "Failed to compute product demand insights" });
+  }
+});
+
 export default router;

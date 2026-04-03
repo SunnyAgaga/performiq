@@ -112,6 +112,23 @@ The Vite proxy rewrites `/crm/api/*` → `http://localhost:3002/api/*` at dev ti
 - AI Assistant page: 4-tab layout — AI Provider (provider selector + model/key/URL/temp), Knowledge Base, Test Chat, System Prompt
 - Inbox: ⚡ button to get AI suggestions (click to insert); "Bot Reply" button for auto-respond
 
+### Product Demand Intelligence (`/product-demand`)
+- **Sidebar**: "Product Demand" nav item (PackageSearch icon) in Core nav section
+- **4 KPI cards**: Total Product Searches, Unique Products in Demand, Not Available Rate (%), Search-to-Order Rate (%)
+- **Two trend charts** (Area): Search Volume Trend + Not Available Trend — daily data points over selected period, auto-condensed for wider ranges
+- **Top Products in Demand**: ranked list with horizontal progress bars coloured per product
+- **Searches by Channel**: WhatsApp / Facebook / Instagram breakdown with colour-coded progress bars
+- **Demand Health mini-card**: Stock Coverage % + Conversion Rate % at a glance
+- **Product Search Frequency bar chart**: top 10 products in multi-colour bars
+- **Date range selector**: 7, 14, 30, 60, 90 days
+- **Backend route**: `GET /api/insights/product-demand?days=N` in `crm-backend/src/routes/insights.ts`
+  - Detects search intent from customer messages via 26 trigger phrases ("do you have", "looking for", "want to buy", etc.)
+  - Extracts product terms (up to 5 words after trigger)
+  - Detects not-available responses from agent/bot messages via 18 patterns ("out of stock", "sold out", etc.)
+  - Search-to-order rate = resolved conversations with a search / total search conversations
+  - Returns: stats, topSearchedProducts, trendData (daily), channelBreakdown
+- **Empty state**: shown when no search data is yet detected
+
 ### Transcripts & Agent KPIs (`/transcripts`)
 - **Sidebar**: "Transcripts" nav item (ScrollText icon) added between Intelligence and Tools section
 - **Two-tab layout**:

@@ -16,6 +16,7 @@ import {
   CalendarClock,
   Brain,
   ScrollText,
+  PackageSearch,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -36,6 +37,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: "Analytics", href: "/analytics", icon: LineChart },
     { name: "Intelligence", href: "/insights", icon: Brain },
     { name: "Transcripts", href: "/transcripts", icon: ScrollText },
+    { name: "Product Demand", href: "/product-demand", icon: PackageSearch },
   ];
 
   const adminNav = agent?.role === "admin"
