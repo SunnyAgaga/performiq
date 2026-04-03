@@ -10,10 +10,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, XCircle, Plus, Copy, ExternalLink, Loader2, Trash2, MessageSquare, AlertCircle, Mail, Save, Eye, EyeOff } from "lucide-react";
+import { CheckCircle2, XCircle, Plus, Copy, ExternalLink, Loader2, Trash2, MessageSquare, AlertCircle, Mail, Save, Eye, EyeOff, Globe, Twitter } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
-type ChannelType = "whatsapp" | "facebook" | "instagram";
+type ChannelType = "whatsapp" | "facebook" | "instagram" | "twitter" | "widget";
 
 interface ApiChannel {
   id: number;
@@ -25,11 +25,25 @@ interface ApiChannel {
   wabaId: string | null;
   pageId: string | null;
   instagramAccountId: string | null;
+  twitterApiKey: string | null;
   hasAccessToken: boolean;
   hasPageAccessToken: boolean;
+  hasTwitterCreds: boolean;
+  metadata: Record<string, unknown> | null;
 }
 
-const CHANNEL_META = {
+const CHANNEL_META: Record<ChannelType, {
+  label: string;
+  color: string;
+  textColor: string;
+  borderColor: string;
+  bgColor: string;
+  icon: string;
+  description: string;
+  docsUrl: string;
+  fields: { key: string; label: string; placeholder: string; type: "text" | "password"; description: string }[];
+  isWidget?: boolean;
+}> = {
   whatsapp: {
     label: "WhatsApp Business",
     color: "bg-green-500",
@@ -40,9 +54,9 @@ const CHANNEL_META = {
     description: "Receive and send WhatsApp messages via Meta's WhatsApp Business API",
     docsUrl: "https://developers.facebook.com/docs/whatsapp/cloud-api/get-started",
     fields: [
-      { key: "accessToken", label: "System User Access Token", placeholder: "EAAxxxxxx...", type: "password" as const, description: "Permanent token from Meta Business Manager" },
-      { key: "phoneNumberId", label: "Phone Number ID", placeholder: "1234567890", type: "text" as const, description: "From your WhatsApp Business Phone Number settings" },
-      { key: "wabaId", label: "WhatsApp Business Account ID", placeholder: "9876543210", type: "text" as const, description: "Your WABA ID from Meta Business Manager" },
+      { key: "accessToken", label: "System User Access Token", placeholder: "EAAxxxxxx...", type: "password", description: "Permanent token from Meta Business Manager" },
+      { key: "phoneNumberId", label: "Phone Number ID", placeholder: "1234567890", type: "text", description: "From your WhatsApp Business Phone Number settings" },
+      { key: "wabaId", label: "WhatsApp Business Account ID", placeholder: "9876543210", type: "text", description: "Your WABA ID from Meta Business Manager" },
     ],
   },
   facebook: {
@@ -55,8 +69,8 @@ const CHANNEL_META = {
     description: "Connect your Facebook Page to receive and send Messenger messages",
     docsUrl: "https://developers.facebook.com/docs/messenger-platform/get-started",
     fields: [
-      { key: "pageAccessToken", label: "Page Access Token", placeholder: "EAAxxxxxx...", type: "password" as const, description: "Page Access Token from your Facebook App" },
-      { key: "pageId", label: "Facebook Page ID", placeholder: "1234567890", type: "text" as const, description: "Your Facebook Page ID" },
+      { key: "pageAccessToken", label: "Page Access Token", placeholder: "EAAxxxxxx...", type: "password", description: "Page Access Token from your Facebook App" },
+      { key: "pageId", label: "Facebook Page ID", placeholder: "1234567890", type: "text", description: "Your Facebook Page ID" },
     ],
   },
   instagram: {
@@ -69,9 +83,38 @@ const CHANNEL_META = {
     description: "Receive Instagram Direct Messages from your business account",
     docsUrl: "https://developers.facebook.com/docs/messenger-platform/instagram",
     fields: [
-      { key: "pageAccessToken", label: "Page Access Token", placeholder: "EAAxxxxxx...", type: "password" as const, description: "Page Access Token (same Facebook App, with Instagram permissions)" },
-      { key: "instagramAccountId", label: "Instagram Account ID", placeholder: "1234567890", type: "text" as const, description: "Your Instagram Business Account ID" },
+      { key: "pageAccessToken", label: "Page Access Token", placeholder: "EAAxxxxxx...", type: "password", description: "Page Access Token (same Facebook App, with Instagram permissions)" },
+      { key: "instagramAccountId", label: "Instagram Account ID", placeholder: "1234567890", type: "text", description: "Your Instagram Business Account ID" },
     ],
+  },
+  twitter: {
+    label: "Twitter / X",
+    color: "bg-black",
+    textColor: "text-neutral-800 dark:text-neutral-200",
+    borderColor: "border-neutral-200 dark:border-neutral-800",
+    bgColor: "bg-neutral-50 dark:bg-neutral-950/30",
+    icon: "𝕏",
+    description: "Connect your Twitter/X account to receive and reply to DMs and mentions",
+    docsUrl: "https://developer.twitter.com/en/portal/dashboard",
+    fields: [
+      { key: "twitterApiKey", label: "API Key (Consumer Key)", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", type: "text", description: "From your Twitter Developer App → Keys and Tokens" },
+      { key: "twitterApiSecret", label: "API Secret (Consumer Secret)", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", type: "password", description: "Consumer Secret from your Twitter Developer App" },
+      { key: "twitterBearerToken", label: "Bearer Token", placeholder: "AAAAAAAAAAAAAAAAAAAAAxxxxxx...", type: "password", description: "Bearer Token for app-only authentication" },
+      { key: "twitterAccessToken", label: "Access Token", placeholder: "xxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxx", type: "text", description: "Access Token for your Twitter account" },
+      { key: "twitterAccessTokenSecret", label: "Access Token Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", type: "password", description: "Access Token Secret for your Twitter account" },
+    ],
+  },
+  widget: {
+    label: "Website Widget",
+    color: "bg-violet-600",
+    textColor: "text-violet-700 dark:text-violet-400",
+    borderColor: "border-violet-200 dark:border-violet-900",
+    bgColor: "bg-violet-50 dark:bg-violet-950/30",
+    icon: "🌐",
+    description: "Embed a live chat widget on your website — visitors chat directly into your CommsCRM inbox",
+    docsUrl: "https://docs.example.com/widget",
+    fields: [],
+    isWidget: true,
   },
 };
 
@@ -89,12 +132,70 @@ function ChannelCard({ channel, onEdit }: { channel: ApiChannel; onEdit: (c: Api
   });
 
   const backendUrl = window.location.origin.replace(/\/crm.*/, "");
-  const webhookUrl = `${backendUrl}/api/webhooks/${channel.type}`;
+  const webhookUrl = channel.type === "twitter"
+    ? `${backendUrl}/api/webhooks/twitter`
+    : `${backendUrl}/api/webhooks/${channel.type}`;
+
+  const widgetId = channel.webhookVerifyToken;
+  const widgetScript = `<script>
+  window.__commscrm = { widgetId: "${widgetId}" };
+</script>
+<script src="${backendUrl}/api/widget.js" async></script>`;
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast({ title: "Copied to clipboard" });
   };
+
+  if (channel.type === "widget") {
+    return (
+      <Card className={`border ${meta.borderColor}`}>
+        <CardHeader className={`pb-3 ${meta.bgColor} rounded-t-lg`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{meta.icon}</span>
+              <div>
+                <CardTitle className="text-base">{channel.name}</CardTitle>
+                <CardDescription className="text-xs mt-0.5">{meta.label}</CardDescription>
+              </div>
+            </div>
+            <Badge className="bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 gap-1">
+              <CheckCircle2 className="h-3 w-3" /> Active
+            </Badge>
+          </div>
+        </CardHeader>
+        <CardContent className="pt-4 space-y-3">
+          <div>
+            <Label className="text-xs text-muted-foreground">Widget ID</Label>
+            <div className="flex items-center gap-2 mt-1">
+              <Input value={widgetId} readOnly className="text-xs font-mono bg-muted/50 border-none h-8" />
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyToClipboard(widgetId)}>
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">Embed Code — paste before &lt;/body&gt; on your website</Label>
+            <div className="relative mt-1">
+              <pre className="text-xs font-mono bg-muted/60 rounded-md p-3 pr-10 text-muted-foreground overflow-x-auto whitespace-pre-wrap">{widgetScript}</pre>
+              <Button variant="ghost" size="icon" className="h-7 w-7 absolute top-2 right-2" onClick={() => copyToClipboard(widgetScript)}>
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+          <Separator />
+          <div className="flex gap-2 justify-end">
+            <Button variant="ghost" size="sm" onClick={() => deleteMutation.mutate()} className="text-destructive hover:text-destructive h-8">
+              <Trash2 className="h-3.5 w-3.5 mr-1" /> Remove
+            </Button>
+            <Button variant="outline" size="sm" className="h-8" onClick={() => onEdit(channel)}>
+              Customize Widget
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className={`border ${meta.borderColor}`}>
@@ -122,7 +223,9 @@ function ChannelCard({ channel, onEdit }: { channel: ApiChannel; onEdit: (c: Api
       </CardHeader>
       <CardContent className="pt-4 space-y-3">
         <div>
-          <Label className="text-xs text-muted-foreground">Webhook URL (add this in Meta Developer App)</Label>
+          <Label className="text-xs text-muted-foreground">
+            {channel.type === "twitter" ? "Webhook URL (add in Twitter Developer Portal → App → Webhooks)" : "Webhook URL (add this in Meta Developer App)"}
+          </Label>
           <div className="flex items-center gap-2 mt-1">
             <Input value={webhookUrl} readOnly className="text-xs font-mono bg-muted/50 border-none h-8" />
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => copyToClipboard(webhookUrl)}>
@@ -158,16 +261,72 @@ function ConfigureDialog({ channel, onClose }: { channel: ApiChannel; onClose: (
   const { toast } = useToast();
   const meta = CHANNEL_META[channel.type];
   const [values, setValues] = useState<Record<string, string>>({});
+  const [widgetColor, setWidgetColor] = useState<string>((channel.metadata?.color as string) ?? "#7c3aed");
+  const [widgetGreeting, setWidgetGreeting] = useState<string>((channel.metadata?.greeting as string) ?? "Hi! How can we help you today?");
+  const [widgetPosition, setWidgetPosition] = useState<string>((channel.metadata?.position as string) ?? "bottom-right");
 
   const updateMutation = useMutation({
-    mutationFn: (data: Record<string, string>) => apiPut(`/channels/${channel.id}`, data),
+    mutationFn: (data: Record<string, unknown>) => apiPut(`/channels/${channel.id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["channels"] });
-      toast({ title: "Channel updated", description: channel.isConnected ? "Channel is now connected!" : "Settings saved. Complete all required fields to connect." });
+      toast({ title: channel.type === "widget" ? "Widget settings saved!" : "Channel updated", description: channel.isConnected ? "Channel is now connected!" : "Settings saved. Complete all required fields to connect." });
       onClose();
     },
     onError: () => toast({ title: "Update failed", variant: "destructive" }),
   });
+
+  const hasExistingCreds = channel.type === "twitter"
+    ? channel.hasTwitterCreds
+    : channel.hasAccessToken || channel.hasPageAccessToken;
+
+  if (channel.type === "widget") {
+    return (
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">🌐 Customize Website Widget</DialogTitle>
+          <DialogDescription>Adjust the appearance and default message of your chat widget.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label className="text-sm font-medium">Primary Color</Label>
+            <p className="text-xs text-muted-foreground mb-1.5">The color of the chat button and header</p>
+            <div className="flex items-center gap-3">
+              <input type="color" value={widgetColor} onChange={(e) => setWidgetColor(e.target.value)} className="h-9 w-14 rounded-md border cursor-pointer" />
+              <Input value={widgetColor} onChange={(e) => setWidgetColor(e.target.value)} className="font-mono text-sm" placeholder="#7c3aed" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-sm font-medium">Greeting Message</Label>
+            <p className="text-xs text-muted-foreground mb-1.5">Shown when a visitor first opens the chat</p>
+            <Input value={widgetGreeting} onChange={(e) => setWidgetGreeting(e.target.value)} placeholder="Hi! How can we help you today?" />
+          </div>
+          <div>
+            <Label className="text-sm font-medium">Widget Position</Label>
+            <p className="text-xs text-muted-foreground mb-1.5">Corner of the screen where the chat button appears</p>
+            <select className="w-full h-9 rounded-md border bg-background px-3 text-sm" value={widgetPosition} onChange={(e) => setWidgetPosition(e.target.value)}>
+              <option value="bottom-right">Bottom Right</option>
+              <option value="bottom-left">Bottom Left</option>
+            </select>
+          </div>
+          <div className="p-4 rounded-lg border bg-muted/30 flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-xl shadow-lg shrink-0" style={{ backgroundColor: widgetColor }}>💬</div>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-medium text-muted-foreground mb-0.5">Widget preview</div>
+              <div className="text-sm font-medium truncate">{widgetGreeting}</div>
+              <div className="text-xs text-muted-foreground">{widgetPosition === "bottom-right" ? "↘ Bottom right" : "↙ Bottom left"}</div>
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={() => updateMutation.mutate({ metadata: { color: widgetColor, greeting: widgetGreeting, position: widgetPosition } })} disabled={updateMutation.isPending}>
+            {updateMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Settings
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    );
+  }
 
   return (
     <DialogContent className="max-w-lg">
@@ -178,7 +337,7 @@ function ConfigureDialog({ channel, onClose }: { channel: ApiChannel; onClose: (
         <DialogDescription>
           Enter your API credentials from the{" "}
           <a href={meta.docsUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">
-            Meta Developer Portal <ExternalLink className="h-3 w-3" />
+            {channel.type === "twitter" ? "Twitter Developer Portal" : "Meta Developer Portal"} <ExternalLink className="h-3 w-3" />
           </a>
         </DialogDescription>
       </DialogHeader>
@@ -197,7 +356,7 @@ function ConfigureDialog({ channel, onClose }: { channel: ApiChannel; onClose: (
             <p className="text-xs text-muted-foreground mb-1.5">{f.description}</p>
             <Input
               type={f.type}
-              placeholder={f.type === "password" && (channel.hasAccessToken || channel.hasPageAccessToken) ? "••••••• (stored)" : f.placeholder}
+              placeholder={f.type === "password" && hasExistingCreds ? "••••••• (stored)" : f.placeholder}
               value={values[f.key] ?? ""}
               onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
             />
@@ -254,6 +413,8 @@ function SimulateDialog({ onClose }: { onClose: () => void }) {
             <option value="whatsapp">WhatsApp</option>
             <option value="facebook">Facebook Messenger</option>
             <option value="instagram">Instagram Direct</option>
+            <option value="twitter">Twitter / X</option>
+            <option value="widget">Website Widget</option>
           </select>
         </div>
         <div>
@@ -261,8 +422,8 @@ function SimulateDialog({ onClose }: { onClose: () => void }) {
           <Input placeholder="John Doe" value={form.customerName} onChange={(e) => setForm((f) => ({ ...f, customerName: e.target.value }))} className="mt-1" />
         </div>
         <div>
-          <Label>Customer Phone / ID</Label>
-          <Input placeholder="+1234567890" value={form.customerPhone} onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))} className="mt-1" />
+          <Label>Customer ID / Handle</Label>
+          <Input placeholder="+1234567890 or @handle" value={form.customerPhone} onChange={(e) => setForm((f) => ({ ...f, customerPhone: e.target.value }))} className="mt-1" />
         </div>
         <div>
           <Label>Message</Label>
@@ -303,9 +464,12 @@ export default function Channels() {
   const createMutation = useMutation({
     mutationFn: ({ type }: { type: ChannelType }) =>
       apiPost("/channels", { type, name: CHANNEL_META[type].label }),
-    onSuccess: () => {
+    onSuccess: (_, { type }) => {
       qc.invalidateQueries({ queryKey: ["channels"] });
-      toast({ title: "Channel added", description: "Now configure your API credentials." });
+      toast({
+        title: type === "widget" ? "Website Widget created!" : "Channel added",
+        description: type === "widget" ? "Copy the embed code and paste it on your website." : "Now configure your API credentials.",
+      });
     },
     onError: (err: { message?: string }) => {
       toast({ title: err?.message?.includes("already exists") ? "Channel already added" : "Failed to add channel", variant: "destructive" });
@@ -314,12 +478,40 @@ export default function Channels() {
 
   const channelsByType = (type: ChannelType) => channels.find((c) => c.type === type);
 
+  const requirementsList: Record<ChannelType, React.ReactNode> = {
+    whatsapp: (<>
+      <li>A Meta Business account</li>
+      <li>WhatsApp Business API access (via Meta)</li>
+      <li>A verified WhatsApp phone number</li>
+    </>),
+    facebook: (<>
+      <li>A Facebook Business Page</li>
+      <li>A Meta Developer App</li>
+      <li>Messenger API permissions</li>
+    </>),
+    instagram: (<>
+      <li>An Instagram Business account</li>
+      <li>Connected to a Facebook Page</li>
+      <li>Instagram Messaging API permissions</li>
+    </>),
+    twitter: (<>
+      <li>A Twitter Developer account (developer.twitter.com)</li>
+      <li>A project and App with Basic tier or above</li>
+      <li>Direct Message read/write permissions enabled</li>
+    </>),
+    widget: (<>
+      <li>Access to your website's HTML (to paste one snippet)</li>
+      <li>No third-party accounts or API keys needed</li>
+      <li>Works on any website — WordPress, Webflow, Shopify, etc.</li>
+    </>),
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Channel Connections</h1>
-          <p className="text-muted-foreground mt-1">Connect WhatsApp, Facebook, and Instagram to your unified inbox.</p>
+          <p className="text-muted-foreground mt-1">Connect WhatsApp, Facebook, Instagram, Twitter/X, and your website to your unified inbox.</p>
         </div>
         <Button variant="outline" onClick={() => setShowSimulate(true)} className="gap-2">
           <MessageSquare className="h-4 w-4" />
@@ -328,18 +520,19 @@ export default function Channels() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
+        <TabsList className="mb-6 flex-wrap h-auto gap-1">
           {(Object.keys(CHANNEL_META) as ChannelType[]).map((type) => (
-            <TabsTrigger key={type} value={type} className="gap-2">
-              {CHANNEL_META[type].icon} {CHANNEL_META[type].label}
+            <TabsTrigger key={type} value={type} className="gap-1.5">
+              {type === "twitter" ? <Twitter className="h-3.5 w-3.5" /> : type === "widget" ? <Globe className="h-3.5 w-3.5" /> : <span className="text-sm">{CHANNEL_META[type].icon}</span>}
+              {CHANNEL_META[type].label}
               {channelsByType(type)?.isConnected && (
-                <span className="ml-1 h-2 w-2 rounded-full bg-green-500 inline-block" />
+                <span className="ml-0.5 h-2 w-2 rounded-full bg-green-500 inline-block" />
               )}
             </TabsTrigger>
           ))}
-          <TabsTrigger value="email" className="gap-2">
-            <Mail className="h-4 w-4 text-indigo-500" /> Email
-            {emailSaved && <span className="ml-1 h-2 w-2 rounded-full bg-green-500 inline-block" />}
+          <TabsTrigger value="email" className="gap-1.5">
+            <Mail className="h-3.5 w-3.5 text-indigo-500" /> Email
+            {emailSaved && <span className="ml-0.5 h-2 w-2 rounded-full bg-green-500 inline-block" />}
           </TabsTrigger>
         </TabsList>
 
@@ -352,7 +545,17 @@ export default function Channels() {
               <Card className="max-w-2xl">
                 <CardHeader className={`${meta.bgColor} rounded-t-lg border-b ${meta.borderColor}`}>
                   <div className="flex items-center gap-4">
-                    <span className="text-4xl">{meta.icon}</span>
+                    {type === "twitter" ? (
+                      <div className="h-12 w-12 rounded-xl bg-black flex items-center justify-center text-white">
+                        <Twitter className="h-6 w-6" />
+                      </div>
+                    ) : type === "widget" ? (
+                      <div className="h-12 w-12 rounded-xl bg-violet-600 flex items-center justify-center text-white">
+                        <Globe className="h-6 w-6" />
+                      </div>
+                    ) : (
+                      <span className="text-4xl">{meta.icon}</span>
+                    )}
                     <div>
                       <CardTitle>Connect {meta.label}</CardTitle>
                       <CardDescription className="mt-1">{meta.description}</CardDescription>
@@ -366,38 +569,38 @@ export default function Channels() {
                     <ChannelCard channel={existing} onEdit={setConfiguringChannel} />
                   ) : (
                     <div className="text-center py-8">
-                      <span className="text-5xl mb-4 block">{meta.icon}</span>
+                      {type === "twitter" ? (
+                        <div className="h-16 w-16 rounded-full bg-black flex items-center justify-center text-white text-2xl mx-auto mb-4">
+                          <Twitter className="h-8 w-8" />
+                        </div>
+                      ) : type === "widget" ? (
+                        <div className="h-16 w-16 rounded-full bg-violet-600 flex items-center justify-center text-white text-2xl mx-auto mb-4">
+                          <Globe className="h-8 w-8" />
+                        </div>
+                      ) : (
+                        <span className="text-5xl mb-4 block">{meta.icon}</span>
+                      )}
                       <p className="text-muted-foreground mb-6 text-sm max-w-sm mx-auto">
-                        Connect your {meta.label} account to start receiving and sending messages through CommsCRM.
+                        {type === "widget"
+                          ? "Add a live chat bubble to your website in minutes. Visitors can chat with your team directly from any page."
+                          : `Connect your ${meta.label} account to start receiving and sending messages through CommsCRM.`}
                       </p>
 
                       <div className="mb-6 p-4 bg-muted/50 rounded-lg text-left text-sm space-y-2">
                         <p className="font-medium">Before connecting, you'll need:</p>
                         <ul className="list-disc pl-5 space-y-1 text-muted-foreground">
-                          {type === "whatsapp" && <>
-                            <li>A Meta Business account</li>
-                            <li>WhatsApp Business API access (via Meta)</li>
-                            <li>A verified WhatsApp phone number</li>
-                          </>}
-                          {type === "facebook" && <>
-                            <li>A Facebook Business Page</li>
-                            <li>A Meta Developer App</li>
-                            <li>Messenger API permissions</li>
-                          </>}
-                          {type === "instagram" && <>
-                            <li>An Instagram Business account</li>
-                            <li>Connected to a Facebook Page</li>
-                            <li>Instagram Messaging API permissions</li>
-                          </>}
+                          {requirementsList[type]}
                         </ul>
-                        <a href={meta.docsUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-xs mt-1">
-                          View setup guide <ExternalLink className="h-3 w-3" />
-                        </a>
+                        {type !== "widget" && (
+                          <a href={meta.docsUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-xs mt-1">
+                            View setup guide <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
                       </div>
 
                       <Button onClick={() => createMutation.mutate({ type })} disabled={createMutation.isPending} className="gap-2">
                         {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                        Add {meta.label}
+                        {type === "widget" ? "Create Website Widget" : `Add ${meta.label}`}
                       </Button>
                     </div>
                   )}
@@ -406,6 +609,7 @@ export default function Channels() {
             </TabsContent>
           );
         })}
+
         {/* Email tab */}
         <TabsContent value="email">
           <Card className="max-w-2xl">

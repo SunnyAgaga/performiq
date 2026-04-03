@@ -20,6 +20,14 @@ async function start() {
     `);
   } catch (_) {}
 
+  try {
+    await sequelize.query(`
+      ALTER TABLE crm_channels
+        ALTER COLUMN type TYPE VARCHAR(50)
+        USING type::text;
+    `);
+  } catch (_) {}
+
   await sequelize.sync({ alter: true });
   logger.info("CRM database tables synced");
 

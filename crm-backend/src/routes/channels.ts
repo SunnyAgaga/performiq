@@ -4,23 +4,47 @@ import { requireAuth, AuthRequest } from "../middlewares/auth.js";
 
 const router = Router();
 
+function serializeChannel(c: Channel) {
+  return {
+    id: c.id,
+    type: c.type,
+    name: c.name,
+    isConnected: c.isConnected,
+    webhookVerifyToken: c.webhookVerifyToken,
+    phoneNumberId: c.phoneNumberId,
+    wabaId: c.wabaId,
+    pageId: c.pageId,
+    instagramAccountId: c.instagramAccountId,
+    hasAccessToken: !!c.accessToken,
+    hasPageAccessToken: !!c.pageAccessToken,
+    hasTwitterCreds: !!(c.twitterApiKey && c.twitterBearerToken),
+    twitterApiKey: c.twitterApiKey,
+    metadata: c.metadata,
+    createdAt: c.createdAt,
+  };
+}
+
+function checkIsConfigured(channel: Channel): boolean {
+  switch (channel.type) {
+    case "whatsapp":
+      return !!(channel.accessToken && channel.phoneNumberId);
+    case "facebook":
+      return !!(channel.pageAccessToken && channel.pageId);
+    case "instagram":
+      return !!(channel.pageAccessToken && channel.instagramAccountId);
+    case "twitter":
+      return !!(channel.twitterApiKey && channel.twitterBearerToken);
+    case "widget":
+      return true;
+    default:
+      return false;
+  }
+}
+
 router.get("/channels", requireAuth, async (_req: AuthRequest, res) => {
   try {
     const channels = await Channel.findAll({ order: [["type", "ASC"]] });
-    res.json(channels.map((c) => ({
-      id: c.id,
-      type: c.type,
-      name: c.name,
-      isConnected: c.isConnected,
-      webhookVerifyToken: c.webhookVerifyToken,
-      phoneNumberId: c.phoneNumberId,
-      wabaId: c.wabaId,
-      pageId: c.pageId,
-      instagramAccountId: c.instagramAccountId,
-      hasAccessToken: !!c.accessToken,
-      hasPageAccessToken: !!c.pageAccessToken,
-      createdAt: c.createdAt,
-    })));
+    res.json(channels.map(serializeChannel));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -40,7 +64,11 @@ router.post("/channels", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
     const channel = await Channel.create({ type, name });
-    res.status(201).json({ id: channel.id, type: channel.type, name: channel.name, isConnected: false, webhookVerifyToken: channel.webhookVerifyToken });
+    if (type === "widget") {
+      channel.isConnected = true;
+      await channel.save();
+    }
+    res.status(201).json(serializeChannel(channel));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
@@ -55,7 +83,21 @@ router.put("/channels/:id", requireAuth, async (req: AuthRequest, res) => {
       return;
     }
 
-    const { name, accessToken, phoneNumberId, wabaId, pageId, pageAccessToken, instagramAccountId } = req.body;
+    const {
+      name,
+      accessToken,
+      phoneNumberId,
+      wabaId,
+      pageId,
+      pageAccessToken,
+      instagramAccountId,
+      twitterApiKey,
+      twitterApiSecret,
+      twitterBearerToken,
+      twitterAccessToken,
+      twitterAccessTokenSecret,
+      metadata,
+    } = req.body;
 
     if (name) channel.name = name;
     if (accessToken !== undefined) channel.accessToken = accessToken || null;
@@ -64,27 +106,19 @@ router.put("/channels/:id", requireAuth, async (req: AuthRequest, res) => {
     if (pageId !== undefined) channel.pageId = pageId || null;
     if (pageAccessToken !== undefined) channel.pageAccessToken = pageAccessToken || null;
     if (instagramAccountId !== undefined) channel.instagramAccountId = instagramAccountId || null;
+    if (twitterApiKey !== undefined) channel.twitterApiKey = twitterApiKey || null;
+    if (twitterApiSecret !== undefined) channel.twitterApiSecret = twitterApiSecret || null;
+    if (twitterBearerToken !== undefined) channel.twitterBearerToken = twitterBearerToken || null;
+    if (twitterAccessToken !== undefined) channel.twitterAccessToken = twitterAccessToken || null;
+    if (twitterAccessTokenSecret !== undefined) channel.twitterAccessTokenSecret = twitterAccessTokenSecret || null;
+    if (metadata !== undefined && typeof metadata === "object") {
+      channel.metadata = { ...(channel.metadata ?? {}), ...metadata };
+    }
 
-    const isConfigured = (channel.type === "whatsapp" && channel.accessToken && channel.phoneNumberId) ||
-      (channel.type === "facebook" && channel.pageAccessToken && channel.pageId) ||
-      (channel.type === "instagram" && channel.pageAccessToken && channel.instagramAccountId);
-
-    channel.isConnected = !!isConfigured;
+    channel.isConnected = checkIsConfigured(channel);
     await channel.save();
 
-    res.json({
-      id: channel.id,
-      type: channel.type,
-      name: channel.name,
-      isConnected: channel.isConnected,
-      webhookVerifyToken: channel.webhookVerifyToken,
-      phoneNumberId: channel.phoneNumberId,
-      wabaId: channel.wabaId,
-      pageId: channel.pageId,
-      instagramAccountId: channel.instagramAccountId,
-      hasAccessToken: !!channel.accessToken,
-      hasPageAccessToken: !!channel.pageAccessToken,
-    });
+    res.json(serializeChannel(channel));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Internal server error" });
