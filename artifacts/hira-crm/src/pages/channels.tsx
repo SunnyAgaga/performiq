@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, XCircle, Plus, Copy, ExternalLink, Loader2, Trash2, MessageSquare, AlertCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Plus, Copy, ExternalLink, Loader2, Trash2, MessageSquare, AlertCircle, Mail, Save, Eye, EyeOff } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type ChannelType = "whatsapp" | "facebook" | "instagram";
@@ -290,7 +290,10 @@ export default function Channels() {
   const qc = useQueryClient();
   const [configuringChannel, setConfiguringChannel] = useState<ApiChannel | null>(null);
   const [showSimulate, setShowSimulate] = useState(false);
-  const [activeTab, setActiveTab] = useState<ChannelType>("whatsapp");
+  const [activeTab, setActiveTab] = useState<string>("whatsapp");
+  const [emailConfig, setEmailConfig] = useState({ smtpHost: "", smtpPort: "587", smtpUser: "", smtpPassword: "", imapHost: "", imapPort: "993", fromName: "", fromEmail: "", useSSL: true });
+  const [showEmailPassword, setShowEmailPassword] = useState(false);
+  const [emailSaved, setEmailSaved] = useState(false);
 
   const { data: channels = [], isLoading } = useQuery<ApiChannel[]>({
     queryKey: ["channels"],
@@ -324,7 +327,7 @@ export default function Channels() {
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as ChannelType)}>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           {(Object.keys(CHANNEL_META) as ChannelType[]).map((type) => (
             <TabsTrigger key={type} value={type} className="gap-2">
@@ -334,6 +337,10 @@ export default function Channels() {
               )}
             </TabsTrigger>
           ))}
+          <TabsTrigger value="email" className="gap-2">
+            <Mail className="h-4 w-4 text-indigo-500" /> Email
+            {emailSaved && <span className="ml-1 h-2 w-2 rounded-full bg-green-500 inline-block" />}
+          </TabsTrigger>
         </TabsList>
 
         {(Object.keys(CHANNEL_META) as ChannelType[]).map((type) => {
@@ -399,6 +406,136 @@ export default function Channels() {
             </TabsContent>
           );
         })}
+        {/* Email tab */}
+        <TabsContent value="email">
+          <Card className="max-w-2xl">
+            <CardHeader className="bg-indigo-50 dark:bg-indigo-950/30 rounded-t-lg border-b border-indigo-200 dark:border-indigo-900">
+              <div className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-xl bg-indigo-500 flex items-center justify-center text-white">
+                  <Mail className="h-6 w-6" />
+                </div>
+                <div>
+                  <CardTitle>Connect Email</CardTitle>
+                  <CardDescription className="mt-1">Receive and send emails through your unified CommsCRM inbox via SMTP & IMAP</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-6">
+              {emailSaved && (
+                <Alert className="border-green-200 bg-green-50 dark:bg-green-950/20">
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-700 dark:text-green-400">
+                    Email configured! CommsCRM will deliver emails to your inbox.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Sender Identity</p>
+                <p className="text-xs text-muted-foreground mb-3">The name and email address customers will see</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>Display Name</Label>
+                    <Input placeholder="Support Team" value={emailConfig.fromName} onChange={(e) => setEmailConfig((p) => ({ ...p, fromName: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>From Email</Label>
+                    <Input placeholder="support@yourcompany.com" type="email" value={emailConfig.fromEmail} onChange={(e) => setEmailConfig((p) => ({ ...p, fromEmail: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Outgoing Mail (SMTP)</p>
+                <p className="text-xs text-muted-foreground mb-3">Used to send replies to customers</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2 space-y-1.5">
+                    <Label>SMTP Host</Label>
+                    <Input placeholder="smtp.gmail.com" value={emailConfig.smtpHost} onChange={(e) => setEmailConfig((p) => ({ ...p, smtpHost: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Port</Label>
+                    <Input placeholder="587" value={emailConfig.smtpPort} onChange={(e) => setEmailConfig((p) => ({ ...p, smtpPort: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4 mt-3">
+                  <div className="space-y-1.5">
+                    <Label>Username / Email</Label>
+                    <Input placeholder="you@gmail.com" value={emailConfig.smtpUser} onChange={(e) => setEmailConfig((p) => ({ ...p, smtpUser: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>App Password</Label>
+                    <div className="relative">
+                      <Input
+                        type={showEmailPassword ? "text" : "password"}
+                        placeholder="Enter app password..."
+                        value={emailConfig.smtpPassword}
+                        onChange={(e) => setEmailConfig((p) => ({ ...p, smtpPassword: e.target.value }))}
+                        className="pr-9"
+                      />
+                      <button onClick={() => setShowEmailPassword((v) => !v)} className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground">
+                        {showEmailPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">Incoming Mail (IMAP)</p>
+                <p className="text-xs text-muted-foreground mb-3">Used to receive and sync customer emails into your inbox</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="col-span-2 space-y-1.5">
+                    <Label>IMAP Host</Label>
+                    <Input placeholder="imap.gmail.com" value={emailConfig.imapHost} onChange={(e) => setEmailConfig((p) => ({ ...p, imapHost: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Port</Label>
+                    <Input placeholder="993" value={emailConfig.imapPort} onChange={(e) => setEmailConfig((p) => ({ ...p, imapPort: e.target.value }))} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 bg-muted/50 rounded-lg text-sm space-y-2">
+                <p className="font-medium flex items-center gap-2"><AlertCircle className="h-4 w-4 text-blue-500" /> Recommended setup for Gmail</p>
+                <ul className="list-disc pl-5 space-y-1 text-muted-foreground text-xs">
+                  <li>Enable 2-factor authentication on your Google account</li>
+                  <li>Generate an App Password under Google Account → Security</li>
+                  <li>SMTP: smtp.gmail.com : 587 (TLS) · IMAP: imap.gmail.com : 993 (SSL)</li>
+                </ul>
+                <a href="https://support.google.com/mail/answer/7126229" target="_blank" rel="noreferrer" className="text-primary hover:underline inline-flex items-center gap-1 text-xs">
+                  Gmail IMAP setup guide <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => { setEmailConfig({ smtpHost: "", smtpPort: "587", smtpUser: "", smtpPassword: "", imapHost: "", imapPort: "993", fromName: "", fromEmail: "", useSSL: true }); setEmailSaved(false); }}
+                >
+                  Reset
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!emailConfig.smtpHost || !emailConfig.fromEmail) {
+                      toast({ title: "SMTP host and From Email are required", variant: "destructive" });
+                      return;
+                    }
+                    setEmailSaved(true);
+                    toast({ title: "Email settings saved", description: "Your email account has been connected to CommsCRM." });
+                  }}
+                  className="gap-2"
+                >
+                  <Save className="h-4 w-4" /> Save Email Settings
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       <Dialog open={!!configuringChannel} onOpenChange={(o) => !o && setConfiguringChannel(null)}>

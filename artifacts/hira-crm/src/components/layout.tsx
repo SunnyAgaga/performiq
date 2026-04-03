@@ -12,6 +12,8 @@ import {
   Bot,
   Plug,
   ShieldCheck,
+  Star,
+  CalendarClock,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -23,11 +25,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const { agent } = useAuth();
 
   const navigation = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard, group: "core" },
-    { name: "Inbox", href: "/inbox", icon: Inbox, group: "core" },
-    { name: "Customers", href: "/customers", icon: Users, group: "core" },
-    { name: "Campaigns", href: "/campaigns", icon: Megaphone, group: "core" },
-    { name: "Analytics", href: "/analytics", icon: LineChart, group: "core" },
+    { name: "Dashboard", href: "/", icon: LayoutDashboard },
+    { name: "Inbox", href: "/inbox", icon: Inbox },
+    { name: "Follow-ups", href: "/follow-ups", icon: CalendarClock },
+    { name: "Feedback", href: "/feedback", icon: Star },
+    { name: "Customers", href: "/customers", icon: Users },
+    { name: "Campaigns", href: "/campaigns", icon: Megaphone },
+    { name: "Analytics", href: "/analytics", icon: LineChart },
   ];
 
   const adminNav = agent?.role === "admin"
@@ -40,10 +44,31 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 
+  const allNav = [...navigation, ...adminNav, ...toolsNav];
+
   const handleLogout = () => {
     clearToken();
     window.location.reload();
   };
+
+  function NavItem({ item }: { item: { name: string; href: string; icon: React.ElementType } }) {
+    const isActive = location === item.href;
+    return (
+      <Link key={item.name} href={item.href}>
+        <div
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
+            isActive
+              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          }`}
+          data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
+        >
+          <item.icon className="h-4 w-4 shrink-0" />
+          <span className="text-sm">{item.name}</span>
+        </div>
+      </Link>
+    );
+  }
 
   return (
     <div className="min-h-screen w-full flex bg-background">
@@ -58,68 +83,17 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
           <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2">Core</p>
-          {navigation.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link key={item.name} href={item.href}>
-                <div
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  }`}
-                  data-testid={`nav-${item.name.toLowerCase()}`}
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span className="text-sm">{item.name}</span>
-                </div>
-              </Link>
-            );
-          })}
+          {navigation.map((item) => <NavItem key={item.name} item={item} />)}
 
           {adminNav.length > 0 && (
             <>
               <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2 mt-3">Admin</p>
-              {adminNav.map((item) => {
-                const isActive = location === item.href;
-                return (
-                  <Link key={item.name} href={item.href}>
-                    <div
-                      className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
-                        isActive
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                      }`}
-                      data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span className="text-sm">{item.name}</span>
-                    </div>
-                  </Link>
-                );
-              })}
+              {adminNav.map((item) => <NavItem key={item.name} item={item} />)}
             </>
           )}
 
           <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2 mt-3">Tools</p>
-          {toolsNav.map((item) => {
-            const isActive = location === item.href;
-            return (
-              <Link key={item.name} href={item.href}>
-                <div
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  }`}
-                  data-testid={`nav-${item.name.toLowerCase().replace(" ", "-")}`}
-                >
-                  <item.icon className="h-4 w-4" />
-                  <span className="text-sm">{item.name}</span>
-                </div>
-              </Link>
-            );
-          })}
+          {toolsNav.map((item) => <NavItem key={item.name} item={item} />)}
         </nav>
 
         <div className="p-3 border-t border-sidebar-border flex items-center gap-3">
@@ -150,7 +124,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
               <span className="text-foreground font-medium">
-                {[...navigation, ...adminNav, ...toolsNav].find((n) => n.href === location)?.name ?? "CommsCRM"}
+                {allNav.find((n) => n.href === location)?.name ?? "CommsCRM"}
               </span>
             </div>
           </div>

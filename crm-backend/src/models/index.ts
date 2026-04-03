@@ -6,6 +6,7 @@ export { Campaign } from "./Campaign.js";
 export { Channel } from "./Channel.js";
 export { ClosedConversation } from "./ClosedConversation.js";
 export { ClosedMessage } from "./ClosedMessage.js";
+export { Feedback } from "./Feedback.js";
 
 import { Agent } from "./Agent.js";
 import { Customer } from "./Customer.js";
@@ -14,6 +15,7 @@ import { Message } from "./Message.js";
 import { Channel } from "./Channel.js";
 import { ClosedConversation } from "./ClosedConversation.js";
 import { ClosedMessage } from "./ClosedMessage.js";
+import { Feedback } from "./Feedback.js";
 
 Customer.hasMany(Conversation, { foreignKey: "customerId", as: "conversations" });
 Conversation.belongsTo(Customer, { foreignKey: "customerId", as: "customer" });
@@ -29,3 +31,6 @@ Message.belongsTo(Conversation, { foreignKey: "conversationId", as: "conversatio
 
 ClosedConversation.hasMany(ClosedMessage, { foreignKey: "closedConversationId", as: "messages" });
 ClosedMessage.belongsTo(ClosedConversation, { foreignKey: "closedConversationId", as: "closedConversation" });
+
+Feedback.belongsTo(Customer, { foreignKey: "customerId", as: "customer" });
+Feedback.belongsTo(Agent, { foreignKey: "agentId", as: "agent" });

@@ -10,6 +10,7 @@ import channelsRouter from "./channels.js";
 import aiRouter from "./ai.js";
 import webhooksRouter from "./webhooks.js";
 import closedRouter from "./closed.js";
+import feedbackRouter from "./feedback.js";
 
 const router = Router();
 
@@ -27,5 +28,6 @@ router.use(analyticsRouter);
 router.use(channelsRouter);
 router.use(aiRouter);
 router.use(closedRouter);
+router.use(feedbackRouter);
 
 export default router;

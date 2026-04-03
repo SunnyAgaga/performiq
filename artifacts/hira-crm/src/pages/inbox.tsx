@@ -9,10 +9,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Search, MoreVertical, Send, CheckCircle, Paperclip, Smile,
   UserPlus, MessageSquare, Loader2, Sparkles, Bot, Zap, RefreshCw,
-  ChevronUp, Lock, AlertTriangle, XCircle, Archive, Clock
+  ChevronUp, Lock, AlertTriangle, Archive, Clock, CalendarClock
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -43,6 +46,8 @@ interface ApiConversation {
   lockedByAgent: { id: number; name: string } | null;
   lockedByAgentId: number | null;
   lastMessage: { content: string; sender: "customer" | "agent" | "bot" } | null;
+  followUpAt: string | null;
+  followUpNote: string | null;
 }
 interface ApiMessage { id: number; sender: "customer" | "agent" | "bot"; content: string; isRead: boolean; createdAt: string; }
 interface ConversationListResponse { total: number; conversations: ApiConversation[]; }
@@ -73,6 +78,7 @@ export default function Inbox() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [selectedClosedId, setSelectedClosedId] = useState<number | null>(null);
   const [filter, setFilter] = useState<string>("all");
+  const [channelFilter, setChannelFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [replyText, setReplyText] = useState("");
   const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
@@ -81,15 +87,19 @@ export default function Inbox() {
   const [isAutoResponding, setIsAutoResponding] = useState(false);
   const [lockConflict, setLockConflict] = useState<{ name: string } | null>(null);
   const [showCloseDialog, setShowCloseDialog] = useState(false);
+  const [showFollowUpDialog, setShowFollowUpDialog] = useState(false);
+  const [followUpDate, setFollowUpDate] = useState(new Date(Date.now() + 86400000).toISOString().slice(0, 16));
+  const [followUpNote, setFollowUpNote] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const convParams = new URLSearchParams();
   if (filter !== "all") convParams.set("status", filter);
+  if (channelFilter !== "all") convParams.set("channel", channelFilter);
   if (searchQuery) convParams.set("search", searchQuery);
   convParams.set("limit", "50");
 
   const { data: convData, isLoading: convLoading } = useQuery<ConversationListResponse>({
-    queryKey: ["conversations", filter, searchQuery],
+    queryKey: ["conversations", filter, channelFilter, searchQuery],
     queryFn: () => apiGet(`/conversations?${convParams.toString()}`),
     refetchInterval: 5000,
     enabled: tab === "active",
@@ -204,6 +214,19 @@ export default function Inbox() {
     },
   });
 
+  const followUpMutation = useMutation({
+    mutationFn: ({ id, followUpAt, followUpNote }: { id: number; followUpAt: string | null; followUpNote: string | null }) =>
+      apiPut(`/conversations/${id}/follow-up`, { followUpAt, followUpNote }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["conversations"] });
+      qc.invalidateQueries({ queryKey: ["follow-ups"] });
+      toast({ title: "Follow-up scheduled", description: "This conversation has been marked for follow-up." });
+      setShowFollowUpDialog(false);
+      setFollowUpNote("");
+    },
+    onError: () => toast({ title: "Failed to schedule follow-up", variant: "destructive" }),
+  });
+
   const handleSend = () => {
     if (!replyText.trim() || !selectedId) return;
     sendMessageMutation.mutate({ content: replyText });
@@ -275,7 +298,7 @@ export default function Inbox() {
         <div className="p-4 border-b flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-lg">Inbox</h2>
-            <Tabs value={tab} onValueChange={(v) => { setTab(v as InboxTab); setSelectedId(null); setSelectedClosedId(null); }}>
+            <Tabs value={tab} onValueChange={(v) => { setTab(v as InboxTab); setSelectedId(null); setSelectedClosedId(null); setChannelFilter("all"); }}>
               <TabsList className="h-7">
                 <TabsTrigger value="active" className="text-xs h-6 px-2">Active</TabsTrigger>
                 <TabsTrigger value="closed" className="text-xs h-6 px-2 gap-1">
@@ -284,6 +307,38 @@ export default function Inbox() {
               </TabsList>
             </Tabs>
           </div>
+
+          {/* Channel filter tabs */}
+          {tab === "active" && (() => {
+            const WhatsAppIcon = getChannelIcon("whatsapp");
+            const FacebookIcon = getChannelIcon("facebook");
+            const InstagramIcon = getChannelIcon("instagram");
+            const channels = [
+              { key: "all", label: "All", icon: null },
+              { key: "whatsapp", label: "WhatsApp", icon: WhatsAppIcon, color: "text-green-500" },
+              { key: "facebook", label: "Facebook", icon: FacebookIcon, color: "text-blue-600" },
+              { key: "instagram", label: "Instagram", icon: InstagramIcon, color: "text-pink-500" },
+            ];
+            return (
+              <div className="flex gap-1">
+                {channels.map((ch) => (
+                  <button
+                    key={ch.key}
+                    onClick={() => setChannelFilter(ch.key)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+                      channelFilter === ch.key
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/50 text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    {ch.icon ? <ch.icon className={`h-3 w-3 ${channelFilter === ch.key ? "text-primary-foreground" : ch.color}`} /> : null}
+                    {ch.label}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -399,6 +454,12 @@ export default function Inbox() {
                           <Badge variant="secondary" className={`text-[10px] px-1.5 py-0 h-4 border-none ${getStatusColor(conv.status)}`}>
                             {conv.status}
                           </Badge>
+                          {conv.followUpAt && (
+                            <span className="flex items-center gap-0.5 text-[10px] text-orange-600 dark:text-orange-400 font-medium">
+                              <CalendarClock className="h-2.5 w-2.5" />
+                              {format(new Date(conv.followUpAt), "MMM d")}
+                            </span>
+                          )}
                           {conv.assignedAgent && (
                             <span className="text-[10px] text-muted-foreground truncate">
                               · {conv.assignedAgent.name.split(' ')[0]}
@@ -576,6 +637,26 @@ export default function Inbox() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem>View Customer Profile</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setFollowUpDate(new Date(Date.now() + 86400000).toISOString().slice(0, 16));
+                      setFollowUpNote(selectedConv?.followUpNote ?? "");
+                      setShowFollowUpDialog(true);
+                    }}
+                    data-testid="menu-item-follow-up"
+                  >
+                    <CalendarClock className="h-4 w-4 mr-2 text-orange-500" />
+                    {selectedConv?.followUpAt ? "Update Follow-up" : "Schedule Follow-up"}
+                  </DropdownMenuItem>
+                  {selectedConv?.followUpAt && (
+                    <DropdownMenuItem
+                      onClick={() => followUpMutation.mutate({ id: selectedConv.id, followUpAt: null, followUpNote: null })}
+                    >
+                      <Clock className="h-4 w-4 mr-2 text-muted-foreground" />
+                      Clear Follow-up
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive"
@@ -877,6 +958,52 @@ export default function Inbox() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Follow-up Dialog */}
+      <Dialog open={showFollowUpDialog} onOpenChange={setShowFollowUpDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="h-5 w-5 text-orange-500" /> Schedule Follow-up
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Follow-up Date & Time</Label>
+              <input
+                type="datetime-local"
+                value={followUpDate}
+                onChange={(e) => setFollowUpDate(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Note (optional)</Label>
+              <Textarea
+                placeholder="Add a reminder note..."
+                value={followUpNote}
+                onChange={(e) => setFollowUpNote(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowFollowUpDialog(false)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!selectedId) return;
+                followUpMutation.mutate({ id: selectedId, followUpAt: followUpDate, followUpNote: followUpNote || null });
+              }}
+              disabled={followUpMutation.isPending || !followUpDate}
+              className="gap-2"
+            >
+              <CalendarClock className="h-4 w-4" />
+              {followUpMutation.isPending ? "Saving..." : "Schedule Follow-up"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

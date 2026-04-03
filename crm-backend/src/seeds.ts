@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { Agent, Customer, Conversation, Message, Campaign } from "./models/index.js";
+import { Agent, Customer, Conversation, Message, Campaign, Feedback } from "./models/index.js";
 import { logger } from "./lib/logger.js";
 
 export async function seedDatabase(): Promise<void> {
@@ -111,6 +111,19 @@ export async function seedDatabase(): Promise<void> {
       openRate: 0,
       clickRate: 0,
     },
+  ]);
+
+  await Feedback.bulkCreate([
+    { conversationId: conversations[0].id, customerId: customers[0].id, rating: 5, comment: "Very helpful and quick response!", channel: "whatsapp", agentId: agents[0].id },
+    { conversationId: conversations[1].id, customerId: customers[1].id, rating: 4, comment: "Good service, resolved my issue.", channel: "facebook", agentId: agents[1].id },
+    { conversationId: conversations[2].id, customerId: customers[2].id, rating: 3, comment: "Took a while but eventually sorted.", channel: "instagram", agentId: agents[2].id },
+    { conversationId: conversations[3].id, customerId: customers[3].id, rating: 5, comment: "Excellent! Went above and beyond.", channel: "whatsapp", agentId: agents[0].id },
+    { conversationId: conversations[4].id, customerId: customers[4].id, rating: 2, comment: "Response was slow and confusing.", channel: "facebook", agentId: agents[3].id },
+    { conversationId: conversations[5].id, customerId: customers[5].id, rating: 4, comment: "Overall satisfied with the support.", channel: "whatsapp", agentId: agents[1].id },
+    { conversationId: conversations[6].id, customerId: customers[6].id, rating: 5, comment: "Amazing experience, 10/10!", channel: "instagram", agentId: agents[2].id },
+    { customerId: customers[0].id, rating: 4, comment: "Follow-up was appreciated.", channel: "whatsapp", agentId: agents[0].id },
+    { customerId: customers[2].id, rating: 3, channel: "facebook", agentId: agents[1].id },
+    { customerId: customers[4].id, rating: 5, comment: "Superb help!", channel: "whatsapp", agentId: agents[0].id },
   ]);
 
   logger.info("CRM database seeded successfully");

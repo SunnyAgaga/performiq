@@ -269,6 +269,41 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
   }
 });
 
+router.put("/conversations/:id/follow-up", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { followUpAt, followUpNote } = req.body;
+    const conversation = await Conversation.findByPk(req.params.id);
+    if (!conversation) {
+      res.status(404).json({ error: "Conversation not found" });
+      return;
+    }
+    await conversation.update({
+      followUpAt: followUpAt ? new Date(followUpAt) : null,
+      followUpNote: followUpNote ?? null,
+    });
+    res.json({ success: true, followUpAt: conversation.followUpAt, followUpNote: conversation.followUpNote });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/follow-ups", requireAuth, async (_req: AuthRequest, res) => {
+  try {
+    const followUps = await Conversation.findAll({
+      where: { followUpAt: { [Op.not]: null } },
+      include: [
+        { model: Customer, as: "customer", attributes: ["id", "name", "phone", "channel"] },
+        { model: Agent, as: "assignedAgent", attributes: ["id", "name", "avatar"], required: false },
+      ],
+      order: [["followUpAt", "ASC"]],
+      limit: 100,
+    });
+    res.json(followUps);
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/conversations/:id/messages", requireAuth, async (req: AuthRequest, res) => {
   try {
     const { content, sender = "agent" } = req.body;
