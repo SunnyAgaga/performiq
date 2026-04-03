@@ -6,6 +6,7 @@ import {
   UserPlus, UserMinus, CheckCircle2, Clock, AlertCircle, Plus, X,
   ChevronDown, ChevronRight, Edit2, Trash2, FileText, Users, Settings,
   RefreshCw, Search, Filter, Check, SkipForward, CircleDot,
+  Upload, Download, File, ListTodo,
 } from "lucide-react";
 import { format } from "date-fns";
 import { apiFetch } from "@/lib/utils";
@@ -252,6 +253,11 @@ function WorkflowDetail({
   const [taskDraft, setTaskDraft] = useState<any>({});
   const [editingHeader, setEditingHeader] = useState(false);
   const [headerDraft, setHeaderDraft] = useState({ title: "", notes: "", targetCompletionDate: "" });
+  const [activeTab, setActiveTab] = useState<"tasks" | "documents">("tasks");
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [docNotes, setDocNotes] = useState("");
 
   // Fetch fresh workflow data from server
   const refresh = useCallback(async (id: number) => {
@@ -275,6 +281,74 @@ function WorkflowDetail({
   const pushUpdate = (updated: any) => {
     setWorkflow(updated);
     onUpdate(updated);
+  };
+
+  const fetchDocuments = useCallback(async (id: number) => {
+    setDocsLoading(true);
+    try {
+      const res = await apiFetch(`/api/onboarding/workflows/${id}/documents`);
+      if (res.ok) setDocuments(await res.json());
+    } finally {
+      setDocsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "documents") fetchDocuments(workflow.id);
+  }, [activeTab, workflow.id]);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = (ev.target?.result as string).split(",")[1];
+        const res = await apiFetch(`/api/onboarding/workflows/${workflow.id}/documents`, {
+          method: "POST",
+          body: JSON.stringify({ name: file.name, fileData: base64, fileType: file.type, notes: docNotes }),
+        });
+        if (!res.ok) throw new Error("Upload failed");
+        const doc = await res.json();
+        setDocuments(prev => [doc, ...prev]);
+        setDocNotes("");
+        toast({ title: "Document uploaded" });
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      toast({ title: "Failed to upload document", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
+
+  const downloadDoc = async (doc: any) => {
+    try {
+      const res = await apiFetch(`/api/onboarding/documents/${doc.id}/download`);
+      if (!res.ok) throw new Error();
+      const { fileData, fileType, name } = await res.json();
+      if (!fileData) { toast({ title: "No file data", variant: "destructive" }); return; }
+      const blob = new Blob([Uint8Array.from(atob(fileData), c => c.charCodeAt(0))], { type: fileType || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = name; a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({ title: "Download failed", variant: "destructive" });
+    }
+  };
+
+  const deleteDoc = async (docId: number) => {
+    if (!confirm("Delete this document?")) return;
+    try {
+      await apiFetch(`/api/onboarding/documents/${docId}`, { method: "DELETE" });
+      setDocuments(prev => prev.filter(d => d.id !== docId));
+      toast({ title: "Document deleted" });
+    } catch {
+      toast({ title: "Failed to delete", variant: "destructive" });
+    }
   };
 
   const updateTask = async (taskId: number, patch: any) => {
@@ -471,8 +545,22 @@ function WorkflowDetail({
           )}
         </div>
 
+        {/* Tab Switcher */}
+        <div className="flex border-b border-border px-4 bg-background shrink-0">
+          {([["tasks", "Tasks", ListTodo], ["documents", "Documents", File]] as const).map(([key, label, Icon]) => (
+            <button key={key} onClick={() => setActiveTab(key)}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
+                activeTab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              <Icon className="w-4 h-4" />{label}
+              {key === "documents" && documents.length > 0 && (
+                <span className="ml-1 text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-semibold">{documents.length}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
         {/* Tasks */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {activeTab === "tasks" && <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {loading && (workflow.tasks || []).length === 0 && (
             <div className="text-center text-muted-foreground py-12">
               <RefreshCw className="w-8 h-8 mx-auto mb-2 opacity-30 animate-spin" />
@@ -678,7 +766,75 @@ function WorkflowDetail({
               )}
             </div>
           )}
-        </div>
+        </div>}
+
+        {/* Documents */}
+        {activeTab === "documents" && (
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Upload area */}
+            <div className="border-2 border-dashed border-border rounded-xl p-5 space-y-3">
+              <div className="flex items-center gap-2 mb-1">
+                <Upload className="w-4 h-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Upload Document</span>
+              </div>
+              <input
+                value={docNotes}
+                onChange={e => setDocNotes(e.target.value)}
+                placeholder="Notes (optional)"
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm outline-none"
+              />
+              <label className={`flex items-center justify-center gap-2 w-full py-2.5 rounded-xl text-sm font-medium cursor-pointer transition-colors ${uploading ? "bg-muted text-muted-foreground" : "bg-primary text-primary-foreground hover:bg-primary/90"}`}>
+                {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                {uploading ? "Uploading…" : "Choose File"}
+                <input type="file" className="hidden" disabled={uploading} onChange={handleFileUpload}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.txt,.csv" />
+              </label>
+            </div>
+
+            {/* Document list */}
+            {docsLoading ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <RefreshCw className="w-6 h-6 mx-auto mb-2 animate-spin opacity-40" />
+                <p className="text-sm">Loading…</p>
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FileText className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">No documents uploaded yet</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {documents.map(doc => (
+                  <div key={doc.id} className="flex items-start gap-3 p-3 rounded-xl border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
+                    <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                      <FileText className="w-4 h-4 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{doc.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {doc.uploadedByName && `By ${doc.uploadedByName} · `}
+                        {format(new Date(doc.createdAt), "MMM d, yyyy")}
+                      </p>
+                      {doc.notes && <p className="text-xs italic text-muted-foreground mt-0.5">{doc.notes}</p>}
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => downloadDoc(doc)}
+                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground" title="Download">
+                        <Download className="w-4 h-4" />
+                      </button>
+                      {canManage && (
+                        <button onClick={() => deleteDoc(doc.id)}
+                          className="p-1.5 rounded-lg hover:bg-red-100 hover:text-red-600 text-muted-foreground" title="Delete">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer actions */}
         {canManage && workflow.status === "active" && (

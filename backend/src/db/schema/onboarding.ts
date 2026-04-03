@@ -61,7 +61,19 @@ export const workflowTasksTable = pgTable("workflow_tasks", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const onboardingDocumentsTable = pgTable("onboarding_documents", {
+  id: serial("id").primaryKey(),
+  workflowId: integer("workflow_id").notNull().references(() => workflowsTable.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  fileData: text("file_data"),
+  fileType: text("file_type"),
+  notes: text("notes"),
+  uploadedById: integer("uploaded_by_id").references(() => usersTable.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export type WorkflowTemplate = typeof workflowTemplatesTable.$inferSelect;
 export type TemplateTask = typeof templateTasksTable.$inferSelect;
 export type Workflow = typeof workflowsTable.$inferSelect;
 export type WorkflowTask = typeof workflowTasksTable.$inferSelect;
+export type OnboardingDocument = typeof onboardingDocumentsTable.$inferSelect;

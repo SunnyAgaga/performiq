@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, workflowTemplatesTable, templateTasksTable, workflowsTable, workflowTasksTable, usersTable } from "../db/index.js";
-import { eq, and, asc, inArray } from "drizzle-orm";
+import { db, workflowTemplatesTable, templateTasksTable, workflowsTable, workflowTasksTable, usersTable, onboardingDocumentsTable } from "../db/index.js";
+import { eq, and, asc, inArray, desc } from "drizzle-orm";
 import { requireAuth, requireHRAccess, AuthRequest } from "../middlewares/auth.js";
 
 const router = Router();
@@ -374,6 +374,82 @@ router.delete("/onboarding/tasks/:id", requireAuth, requireHRAccess, async (req,
     const [wf] = await db.select().from(workflowsTable).where(eq(workflowsTable.id, task.workflowId)).limit(1);
     if (!wf) { res.json({ success: true }); return; }
     res.json(await enrichWorkflow(wf));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// ─── Workflow Documents ───────────────────────────────────────────────────────
+
+// GET /api/onboarding/workflows/:id/documents
+router.get("/onboarding/workflows/:id/documents", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const workflowId = parseInt(req.params.id);
+    const docs = await db
+      .select({
+        id: onboardingDocumentsTable.id,
+        workflowId: onboardingDocumentsTable.workflowId,
+        name: onboardingDocumentsTable.name,
+        fileType: onboardingDocumentsTable.fileType,
+        notes: onboardingDocumentsTable.notes,
+        createdAt: onboardingDocumentsTable.createdAt,
+        uploadedById: onboardingDocumentsTable.uploadedById,
+        uploadedByName: usersTable.name,
+      })
+      .from(onboardingDocumentsTable)
+      .leftJoin(usersTable, eq(onboardingDocumentsTable.uploadedById, usersTable.id))
+      .where(eq(onboardingDocumentsTable.workflowId, workflowId))
+      .orderBy(desc(onboardingDocumentsTable.createdAt));
+    res.json(docs);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// GET /api/onboarding/documents/:docId/download  (returns base64 file data)
+router.get("/onboarding/documents/:docId/download", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const docId = parseInt(req.params.docId);
+    const [doc] = await db.select().from(onboardingDocumentsTable).where(eq(onboardingDocumentsTable.id, docId)).limit(1);
+    if (!doc) { res.status(404).json({ error: "Not found" }); return; }
+    res.json({ fileData: doc.fileData, fileType: doc.fileType, name: doc.name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// POST /api/onboarding/workflows/:id/documents
+router.post("/onboarding/workflows/:id/documents", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const workflowId = parseInt(req.params.id);
+    const { name, fileData, fileType, notes } = req.body;
+    if (!name?.trim()) { res.status(400).json({ error: "Document name required" }); return; }
+
+    const [doc] = await db.insert(onboardingDocumentsTable).values({
+      workflowId,
+      name: name.trim(),
+      fileData: fileData || null,
+      fileType: fileType || null,
+      notes: notes || null,
+      uploadedById: req.user!.id,
+    }).returning();
+
+    res.status(201).json({ ...doc, uploadedByName: req.user!.name });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// DELETE /api/onboarding/documents/:docId
+router.delete("/onboarding/documents/:docId", requireAuth, requireHRAccess, async (req: AuthRequest, res) => {
+  try {
+    const docId = parseInt(req.params.docId);
+    await db.delete(onboardingDocumentsTable).where(eq(onboardingDocumentsTable.id, docId));
+    res.json({ message: "Deleted" });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error" });
