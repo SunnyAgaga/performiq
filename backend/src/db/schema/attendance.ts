@@ -41,6 +41,17 @@ export const timesheetsTable = pgTable("timesheets", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+export const timesheetApproversTable = pgTable("timesheet_approvers", {
+  id: serial("id").primaryKey(),
+  timesheetId: integer("timesheet_id").notNull(),
+  approverId: integer("approver_id").notNull(),
+  orderIndex: integer("order_index").notNull().default(0),
+  status: text("status").notNull().default("pending"), // pending | approved | rejected
+  note: text("note"),
+  reviewedAt: timestamp("reviewed_at"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const timesheetEntriesTable = pgTable("timesheet_entries", {
   id: serial("id").primaryKey(),
   timesheetId: integer("timesheet_id").notNull(),
@@ -64,3 +75,4 @@ export type AttendanceLog = typeof attendanceLogsTable.$inferSelect;
 export type AttendanceLocationPing = typeof attendanceLocationPingsTable.$inferSelect;
 export type Timesheet = typeof timesheetsTable.$inferSelect;
 export type TimesheetEntry = typeof timesheetEntriesTable.$inferSelect;
+export type TimesheetApprover = typeof timesheetApproversTable.$inferSelect;
