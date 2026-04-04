@@ -48,4 +48,27 @@ router.post("/feedback", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+// ── Public endpoint — no auth required ─────────────────────────────────────
+router.post("/feedback/public", async (req, res) => {
+  try {
+    const { rating, comment, channel, customerName } = req.body;
+    if (!rating || rating < 1 || rating > 5) {
+      res.status(400).json({ error: "Rating must be between 1 and 5" });
+      return;
+    }
+    const fb = await Feedback.create({
+      conversationId: null,
+      customerId: null,
+      rating,
+      comment: comment ?? null,
+      channel: channel ?? "web",
+      agentId: null,
+    });
+    res.status(201).json({ ok: true, id: fb.id, customerName: customerName ?? null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;
