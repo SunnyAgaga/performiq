@@ -13,7 +13,7 @@ import { SiWhatsapp, SiFacebook, SiInstagram, SiMailgun } from "react-icons/si";
 import {
   CheckCircle2, Bot, Trash2, Loader2, Eye, EyeOff, XCircle, Zap, Send,
   Globe, Palette, Upload, X, Image as ImageIcon, Wifi, Settings2, Users,
-  Mail, LogOut, ChevronRight,
+  Mail, ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiGet, apiPost, apiPut, getBaseUrl } from "@/lib/api";
@@ -43,7 +43,7 @@ interface BrandingData {
 
 interface ApiAgent { id: number; name: string; email: string; role: string; isActive: boolean; }
 
-type SettingsSection = "channels" | "automation" | "email" | "team" | "appearance" | "account";
+type SettingsSection = "channels" | "automation" | "email" | "team" | "appearance";
 
 interface NavItem {
   id: SettingsSection;
@@ -59,12 +59,11 @@ const NAV_ITEMS: NavItem[] = [
   { id: "email",       label: "Email",           description: "Mailgun broadcasting",  icon: Mail },
   { id: "team",        label: "Team",            description: "Agents & roles",        icon: Users },
   { id: "appearance",  label: "Appearance",      description: "Branding & colors",     icon: Palette, adminOnly: true },
-  { id: "account",     label: "Account",         description: "Sign out",              icon: LogOut },
 ];
 
 export default function Settings() {
   const { toast } = useToast();
-  const { agent: currentAgent, logout } = useAuth();
+  const { agent: currentAgent } = useAuth();
   const { setBrandingData } = useBranding();
   const qc = useQueryClient();
 
@@ -750,43 +749,6 @@ export default function Settings() {
                     Reset to Defaults
                   </Button>
                 </CardFooter>
-              </Card>
-            </>
-          )}
-
-          {/* ── ACCOUNT ────────────────────────────────────────────────────── */}
-          {activeSection === "account" && (
-            <>
-              <div>
-                <h2 className="text-xl font-bold">Account</h2>
-                <p className="text-sm text-muted-foreground mt-1">Manage your session and account preferences.</p>
-              </div>
-              <Card>
-                <CardContent className="pt-6 space-y-4">
-                  {currentAgent && (
-                    <div className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg border">
-                      <Avatar className="h-12 w-12">
-                        <AvatarFallback className="text-base">{currentAgent.name?.charAt(0) ?? "?"}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-semibold">{currentAgent.name}</p>
-                        <p className="text-sm text-muted-foreground">{currentAgent.email}</p>
-                        <Badge variant="secondary" className="mt-1 text-xs capitalize">{currentAgent.role?.replace("_", " ")}</Badge>
-                      </div>
-                    </div>
-                  )}
-                  <Separator />
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Sign out</p>
-                      <p className="text-sm text-muted-foreground">Sign out of your CommsCRM account on this device.</p>
-                    </div>
-                    <Button variant="destructive" onClick={logout} className="gap-2" data-testid="button-logout">
-                      <LogOut className="h-4 w-4" />
-                      Sign out
-                    </Button>
-                  </div>
-                </CardContent>
               </Card>
             </>
           )}
