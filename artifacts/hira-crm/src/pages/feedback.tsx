@@ -344,11 +344,17 @@ export default function FeedbackPage() {
       </div>
 
       <Tabs defaultValue="overview">
-        <TabsList className="mb-2">
-          <TabsTrigger value="overview" className="gap-2">
+        <TabsList className="mb-2 bg-blue-50 dark:bg-blue-950/30 p-1">
+          <TabsTrigger
+            value="overview"
+            className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:text-blue-600 dark:data-[state=inactive]:text-blue-400"
+          >
             <MessageSquare className="h-3.5 w-3.5" /> Overview
           </TabsTrigger>
-          <TabsTrigger value="collect" className="gap-2">
+          <TabsTrigger
+            value="collect"
+            className="gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=inactive]:text-blue-600 dark:data-[state=inactive]:text-blue-400"
+          >
             <Share2 className="h-3.5 w-3.5" /> Collect Feedback
           </TabsTrigger>
         </TabsList>
