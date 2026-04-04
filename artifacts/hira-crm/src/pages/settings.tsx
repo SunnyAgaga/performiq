@@ -14,10 +14,11 @@ import {
   CheckCircle2, Bot, Trash2, Loader2, Eye, EyeOff, XCircle, Zap, Send,
   Globe, Palette, Upload, X, Image as ImageIcon, Wifi, Settings2, Users,
   Mail, ChevronRight, DatabaseZap, Play, RefreshCw, Archive, MessageSquare,
-  AlertTriangle,
+  AlertTriangle, CalendarClock, Plus, Pencil, ToggleLeft, ToggleRight,
+  ShoppingCart, Bell, Package, Tag, UserCheck, Sparkles, Clock, ChevronDown,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { apiGet, apiPost, apiPut, getBaseUrl } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, getBaseUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { applyBrandingToDOM, useBranding } from "@/lib/branding-context";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -44,7 +45,7 @@ interface BrandingData {
 
 interface ApiAgent { id: number; name: string; email: string; role: string; isActive: boolean; }
 
-type SettingsSection = "channels" | "automation" | "email" | "team" | "appearance" | "retention";
+type SettingsSection = "channels" | "automation" | "email" | "team" | "appearance" | "retention" | "followups";
 
 interface NavItem {
   id: SettingsSection;
@@ -55,9 +56,10 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "channels",    label: "Channels",       description: "Connected platforms",   icon: Wifi },
+  { id: "channels",    label: "Channels",        description: "Connected platforms",   icon: Wifi },
   { id: "automation",  label: "AI & Automation", description: "Bot & escalation",      icon: Bot },
   { id: "email",       label: "Email",           description: "Mailgun broadcasting",  icon: Mail },
+  { id: "followups",   label: "Follow-ups",      description: "Automation rules",      icon: CalendarClock },
   { id: "team",        label: "Team",            description: "Agents & roles",        icon: Users },
   { id: "appearance",  label: "Appearance",      description: "Branding & colors",     icon: Palette, adminOnly: true },
   { id: "retention",   label: "Data Retention",  description: "Transcript storage",    icon: DatabaseZap, adminOnly: true },
@@ -755,6 +757,9 @@ export default function Settings() {
             </>
           )}
 
+          {/* ── FOLLOW-UP SETTINGS ───────────────────────────────── */}
+          {activeSection === "followups" && <FollowUpSettingsSection />}
+
           {/* ── DATA RETENTION ───────────────────────────────────── */}
           {activeSection === "retention" && <RetentionSection />}
 
@@ -975,6 +980,495 @@ function RetentionSection() {
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+// ── Follow-Up Settings Section ────────────────────────────────────────────────
+
+type FollowUpCategory = "sales" | "reminder" | "product_update" | "discount" | "reengagement" | "custom";
+type FollowUpTrigger = "resolved" | "inactive" | "manual";
+type FollowUpPriority = "low" | "medium" | "high";
+
+interface FollowUpRule {
+  id: number;
+  name: string;
+  category: FollowUpCategory;
+  isEnabled: boolean;
+  delayDays: number;
+  trigger: FollowUpTrigger;
+  inactivityDays: number | null;
+  messageTemplate: string;
+  useAiPersonalization: boolean;
+  assignToLastAgent: boolean;
+  priority: FollowUpPriority;
+  sendBetweenHoursStart: number;
+  sendBetweenHoursEnd: number;
+}
+
+const CATEGORY_META: Record<FollowUpCategory, { label: string; icon: React.ElementType; color: string; bg: string }> = {
+  sales:          { label: "Sales",           icon: ShoppingCart, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
+  reminder:       { label: "Reminder",        icon: Bell,         color: "text-blue-600 dark:text-blue-400",      bg: "bg-blue-50 dark:bg-blue-900/20" },
+  product_update: { label: "Product Update",  icon: Package,      color: "text-violet-600 dark:text-violet-400",  bg: "bg-violet-50 dark:bg-violet-900/20" },
+  discount:       { label: "Discount",        icon: Tag,          color: "text-orange-600 dark:text-orange-400",  bg: "bg-orange-50 dark:bg-orange-900/20" },
+  reengagement:   { label: "Re-engagement",   icon: UserCheck,    color: "text-rose-600 dark:text-rose-400",      bg: "bg-rose-50 dark:bg-rose-900/20" },
+  custom:         { label: "Custom",          icon: Settings2,    color: "text-gray-600 dark:text-gray-400",      bg: "bg-gray-50 dark:bg-gray-900/20" },
+};
+
+const PRIORITY_COLORS: Record<FollowUpPriority, string> = {
+  high:   "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  medium: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
+  low:    "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+};
+
+const TRIGGER_LABELS: Record<FollowUpTrigger, string> = {
+  resolved: "After conversation resolved",
+  inactive: "After customer inactivity",
+  manual:   "Manual / campaign trigger",
+};
+
+const EMPTY_RULE: Omit<FollowUpRule, "id"> = {
+  name: "",
+  category: "custom",
+  isEnabled: false,
+  delayDays: 3,
+  trigger: "manual",
+  inactivityDays: null,
+  messageTemplate: "",
+  useAiPersonalization: false,
+  assignToLastAgent: true,
+  priority: "medium",
+  sendBetweenHoursStart: 9,
+  sendBetweenHoursEnd: 18,
+};
+
+function FollowUpSettingsSection() {
+  const { toast } = useToast();
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery<{ rules: FollowUpRule[] }>({
+    queryKey: ["follow-up-rules"],
+    queryFn: () => apiGet("/follow-up-rules"),
+  });
+
+  const rules = data?.rules ?? [];
+
+  const [editRule, setEditRule] = useState<Partial<FollowUpRule> | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  function openNew() {
+    setEditRule({ ...EMPTY_RULE });
+    setIsDialogOpen(true);
+  }
+
+  function openEdit(rule: FollowUpRule) {
+    setEditRule({ ...rule });
+    setIsDialogOpen(true);
+  }
+
+  async function saveRule() {
+    if (!editRule?.name || !editRule?.messageTemplate) {
+      toast({ title: "Name and message template are required", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editRule.id) {
+        await apiPut(`/follow-up-rules/${editRule.id}`, editRule);
+        toast({ title: "Rule updated" });
+      } else {
+        await apiPost("/follow-up-rules", editRule);
+        toast({ title: "Rule created" });
+      }
+      qc.invalidateQueries({ queryKey: ["follow-up-rules"] });
+      setIsDialogOpen(false);
+      setEditRule(null);
+    } catch {
+      toast({ title: "Failed to save rule", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleRule(rule: FollowUpRule) {
+    try {
+      await apiPost(`/follow-up-rules/${rule.id}/toggle`, {});
+      qc.invalidateQueries({ queryKey: ["follow-up-rules"] });
+      toast({ title: rule.isEnabled ? "Rule disabled" : "Rule enabled" });
+    } catch {
+      toast({ title: "Failed to toggle rule", variant: "destructive" });
+    }
+  }
+
+  async function deleteRule(id: number) {
+    setDeletingId(id);
+    try {
+      await apiDelete(`/follow-up-rules/${id}`);
+      qc.invalidateQueries({ queryKey: ["follow-up-rules"] });
+      toast({ title: "Rule deleted" });
+    } catch {
+      toast({ title: "Failed to delete rule", variant: "destructive" });
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const activeCount = rules.filter((r) => r.isEnabled).length;
+
+  return (
+    <div className="space-y-6 h-full overflow-y-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Follow-up Automation</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Configure automated follow-up rules to nurture customers across sales, reminders, product updates, and more.
+          </p>
+        </div>
+        <Button size="sm" className="gap-2" onClick={openNew}>
+          <Plus className="h-4 w-4" /> New Rule
+        </Button>
+      </div>
+
+      {/* Stats strip */}
+      <div className="grid grid-cols-3 gap-4">
+        <Card className="border-0 bg-muted/40">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground">Total Rules</p>
+            <p className="text-2xl font-bold mt-0.5">{rules.length}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 bg-muted/40">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground">Active Rules</p>
+            <p className="text-2xl font-bold mt-0.5 text-emerald-600">{activeCount}</p>
+          </CardContent>
+        </Card>
+        <Card className="border-0 bg-muted/40">
+          <CardContent className="pt-4 pb-4">
+            <p className="text-xs text-muted-foreground">Paused Rules</p>
+            <p className="text-2xl font-bold mt-0.5 text-muted-foreground">{rules.length - activeCount}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Info banner */}
+      <div className="rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50 dark:bg-blue-950/20 p-4 flex items-start gap-3 text-sm text-blue-700 dark:text-blue-300">
+        <Sparkles className="h-4 w-4 shrink-0 mt-0.5" />
+        <div>
+          <p className="font-medium">How automation rules work</p>
+          <p className="mt-0.5 text-blue-600/80 dark:text-blue-400/80">
+            When a trigger fires (e.g. conversation resolved), the system schedules the follow-up message to be sent after the configured delay, within the allowed sending window.
+            Rules with <strong>AI Personalisation</strong> will tailor the message using the customer's conversation history.
+          </p>
+        </div>
+      </div>
+
+      {/* Rules list */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {rules.map((rule) => {
+            const meta = CATEGORY_META[rule.category] ?? CATEGORY_META.custom;
+            const Icon = meta.icon;
+            const isExpanded = expandedId === rule.id;
+
+            return (
+              <Card key={rule.id} className={cn("transition-all", rule.isEnabled ? "" : "opacity-60")}>
+                <CardContent className="pt-4 pb-3 px-5">
+                  {/* Top row */}
+                  <div className="flex items-start gap-3">
+                    <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5", meta.bg)}>
+                      <Icon className={cn("h-4 w-4", meta.color)} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm">{rule.name}</span>
+                        <Badge variant="outline" className="text-xs px-1.5">{meta.label}</Badge>
+                        <Badge className={cn("text-xs px-1.5", PRIORITY_COLORS[rule.priority])}>
+                          {rule.priority.charAt(0).toUpperCase() + rule.priority.slice(1)} priority
+                        </Badge>
+                        {rule.useAiPersonalization && (
+                          <Badge className="text-xs px-1.5 bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 gap-1">
+                            <Sparkles className="h-2.5 w-2.5" /> AI
+                          </Badge>
+                        )}
+                        {rule.isEnabled && (
+                          <Badge className="text-xs px-1.5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {TRIGGER_LABELS[rule.trigger]} · Send after <strong>{rule.delayDays}d</strong> · {rule.sendBetweenHoursStart}:00–{rule.sendBetweenHoursEnd}:00
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => setExpandedId(isExpanded ? null : rule.id)}
+                        title="Expand"
+                      >
+                        <ChevronDown className={cn("h-4 w-4 transition-transform", isExpanded && "rotate-180")} />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(rule)} title="Edit">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn("h-7 w-7", rule.isEnabled ? "text-emerald-600" : "text-muted-foreground")}
+                        onClick={() => toggleRule(rule)}
+                        title={rule.isEnabled ? "Disable" : "Enable"}
+                      >
+                        {rule.isEnabled ? <ToggleRight className="h-5 w-5" /> : <ToggleLeft className="h-5 w-5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-destructive/60 hover:text-destructive"
+                        onClick={() => deleteRule(rule.id)}
+                        disabled={deletingId === rule.id}
+                        title="Delete"
+                      >
+                        {deletingId === rule.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Expanded view */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-3 border-t space-y-3">
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">Message Template</p>
+                        <div className="rounded-lg bg-muted/50 border p-3 text-sm text-foreground leading-relaxed">
+                          {rule.messageTemplate}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3 text-xs">
+                        <div className="rounded-lg bg-muted/30 border p-2.5">
+                          <p className="text-muted-foreground mb-0.5">Trigger</p>
+                          <p className="font-medium">{TRIGGER_LABELS[rule.trigger]}</p>
+                          {rule.trigger === "inactive" && rule.inactivityDays && (
+                            <p className="text-muted-foreground">After {rule.inactivityDays} days inactive</p>
+                          )}
+                        </div>
+                        <div className="rounded-lg bg-muted/30 border p-2.5">
+                          <p className="text-muted-foreground mb-0.5">Sending Window</p>
+                          <p className="font-medium">{rule.sendBetweenHoursStart}:00 – {rule.sendBetweenHoursEnd}:00</p>
+                          <p className="text-muted-foreground">Delay: {rule.delayDays} day{rule.delayDays !== 1 ? "s" : ""}</p>
+                        </div>
+                        <div className="rounded-lg bg-muted/30 border p-2.5">
+                          <p className="text-muted-foreground mb-0.5">Assignment</p>
+                          <p className="font-medium">{rule.assignToLastAgent ? "Assign to last agent" : "Unassigned"}</p>
+                        </div>
+                        <div className="rounded-lg bg-muted/30 border p-2.5">
+                          <p className="text-muted-foreground mb-0.5">AI Personalisation</p>
+                          <p className="font-medium">{rule.useAiPersonalization ? "Enabled" : "Disabled"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+
+          {rules.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              <CalendarClock className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm">No follow-up rules yet. Create your first one above.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Edit / Create Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={(o) => { setIsDialogOpen(o); if (!o) setEditRule(null); }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editRule?.id ? "Edit Rule" : "New Follow-up Rule"}</DialogTitle>
+          </DialogHeader>
+
+          {editRule && (
+            <div className="space-y-4 py-2">
+              {/* Name */}
+              <div className="space-y-1.5">
+                <Label>Rule Name</Label>
+                <Input
+                  value={editRule.name ?? ""}
+                  onChange={(e) => setEditRule((r) => r ? { ...r, name: e.target.value } : r)}
+                  placeholder="e.g. Post-sale check-in"
+                />
+              </div>
+
+              {/* Category + Priority */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Category</Label>
+                  <Select
+                    value={editRule.category ?? "custom"}
+                    onValueChange={(v) => setEditRule((r) => r ? { ...r, category: v as FollowUpCategory } : r)}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sales">Sales</SelectItem>
+                      <SelectItem value="reminder">Reminder</SelectItem>
+                      <SelectItem value="product_update">Product Update</SelectItem>
+                      <SelectItem value="discount">Discount</SelectItem>
+                      <SelectItem value="reengagement">Re-engagement</SelectItem>
+                      <SelectItem value="custom">Custom</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Priority</Label>
+                  <Select
+                    value={editRule.priority ?? "medium"}
+                    onValueChange={(v) => setEditRule((r) => r ? { ...r, priority: v as FollowUpPriority } : r)}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="high">High</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Trigger */}
+              <div className="space-y-1.5">
+                <Label>Trigger</Label>
+                <Select
+                  value={editRule.trigger ?? "manual"}
+                  onValueChange={(v) => setEditRule((r) => r ? { ...r, trigger: v as FollowUpTrigger } : r)}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="resolved">After conversation resolved</SelectItem>
+                    <SelectItem value="inactive">After customer inactivity</SelectItem>
+                    <SelectItem value="manual">Manual / campaign trigger</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Inactivity days (conditional) */}
+              {editRule.trigger === "inactive" && (
+                <div className="space-y-1.5">
+                  <Label>Days of inactivity before triggering</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={editRule.inactivityDays ?? ""}
+                    onChange={(e) => setEditRule((r) => r ? { ...r, inactivityDays: Number(e.target.value) || null } : r)}
+                    placeholder="e.g. 7"
+                  />
+                </div>
+              )}
+
+              {/* Delay */}
+              <div className="space-y-1.5">
+                <Label>Send after (days from trigger)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editRule.delayDays ?? 3}
+                  onChange={(e) => setEditRule((r) => r ? { ...r, delayDays: Number(e.target.value) || 0 } : r)}
+                />
+              </div>
+
+              {/* Sending window */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Send from (hour)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={editRule.sendBetweenHoursStart ?? 9}
+                    onChange={(e) => setEditRule((r) => r ? { ...r, sendBetweenHoursStart: Number(e.target.value) } : r)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1"><Clock className="h-3.5 w-3.5" /> Send until (hour)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={23}
+                    value={editRule.sendBetweenHoursEnd ?? 18}
+                    onChange={(e) => setEditRule((r) => r ? { ...r, sendBetweenHoursEnd: Number(e.target.value) } : r)}
+                  />
+                </div>
+              </div>
+
+              {/* Message template */}
+              <div className="space-y-1.5">
+                <Label>Message Template</Label>
+                <p className="text-xs text-muted-foreground">Use <code className="bg-muted px-1 rounded">{"{{customerName}}"}</code> to personalise.</p>
+                <textarea
+                  className="w-full min-h-[110px] rounded-md border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
+                  value={editRule.messageTemplate ?? ""}
+                  onChange={(e) => setEditRule((r) => r ? { ...r, messageTemplate: e.target.value } : r)}
+                  placeholder="Hi {{customerName}}! Just checking in…"
+                />
+              </div>
+
+              <Separator />
+
+              {/* Toggles */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">AI Personalisation</p>
+                    <p className="text-xs text-muted-foreground">Let AI tailor the message using conversation history</p>
+                  </div>
+                  <Switch
+                    checked={editRule.useAiPersonalization ?? false}
+                    onCheckedChange={(v) => setEditRule((r) => r ? { ...r, useAiPersonalization: v } : r)}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Assign to last agent</p>
+                    <p className="text-xs text-muted-foreground">Re-assign the follow-up to whoever handled the conversation</p>
+                  </div>
+                  <Switch
+                    checked={editRule.assignToLastAgent ?? true}
+                    onCheckedChange={(v) => setEditRule((r) => r ? { ...r, assignToLastAgent: v } : r)}
+                  />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium">Enable rule immediately</p>
+                    <p className="text-xs text-muted-foreground">Rule will start triggering follow-ups right away</p>
+                  </div>
+                  <Switch
+                    checked={editRule.isEnabled ?? false}
+                    onCheckedChange={(v) => setEditRule((r) => r ? { ...r, isEnabled: v } : r)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setIsDialogOpen(false); setEditRule(null); }}>Cancel</Button>
+            <Button onClick={saveRule} disabled={saving} className="gap-2">
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editRule?.id ? "Save Changes" : "Create Rule"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -18,6 +18,7 @@ import transcriptsRouter from "./transcripts.js";
 import crmAttendanceRouter from "./crm-attendance.js";
 import brandingRouter from "./branding.js";
 import retentionRouter from "./retention.js";
+import followUpSettingsRouter from "./follow-up-settings.js";
 
 const router = Router();
 
@@ -43,5 +44,6 @@ router.use(transcriptsRouter);
 router.use(crmAttendanceRouter);
 router.use(brandingRouter);
 router.use(retentionRouter);
+router.use(followUpSettingsRouter);
 
 export default router;
