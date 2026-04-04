@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateRangeFilter, DateRange, dateRangeToParams, DEFAULT_DATE_RANGE } from "@/components/date-range-filter";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
@@ -149,12 +149,15 @@ function TrendCard({
 
 export default function Analytics() {
   const qc = useQueryClient();
-  const [days, setDays] = useState("30");
+  const [dateRange, setDateRange] = useState<DateRange>(DEFAULT_DATE_RANGE);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { data, isLoading, isFetching } = useQuery<AnalyticsData>({
-    queryKey: ["analytics-messages", days, refreshKey],
-    queryFn: () => apiGet(`/analytics?days=${days}`),
+    queryKey: ["analytics-messages", dateRange, refreshKey],
+    queryFn: () => {
+      const p = new URLSearchParams(dateRangeToParams(dateRange));
+      return apiGet(`/analytics?${p.toString()}`);
+    },
     staleTime: 60000,
   });
 
@@ -167,8 +170,6 @@ export default function Analytics() {
   const trend = data?.dailyTrend ?? [];
   const channels = data?.channelStats ?? [];
 
-  const dayLabel: Record<string, string> = { "7": "Last 7 days", "30": "Last 30 days", "90": "Last 90 days" };
-
   return (
     <div className="p-6 space-y-6 overflow-auto h-full">
       {/* Header */}
@@ -180,17 +181,8 @@ export default function Analytics() {
           </h1>
           <p className="text-sm text-muted-foreground mt-1">Detailed insights into your message performance and engagement</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-[140px] h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
           <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2 h-9" data-testid="button-refresh-analytics">
             <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
             Refresh

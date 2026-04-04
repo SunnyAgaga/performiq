@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateRangeFilter, DateRange, dateRangeToParams, DEFAULT_DATE_RANGE } from "@/components/date-range-filter";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Cell,
@@ -138,11 +138,14 @@ function EmptyState() {
 
 export default function ProductDemand() {
   const qc = useQueryClient();
-  const [days, setDays] = useState("30");
+  const [dateRange, setDateRange] = useState<DateRange>(DEFAULT_DATE_RANGE);
 
   const { data, isLoading, isFetching } = useQuery<ProductDemandData>({
-    queryKey: ["product-demand", days],
-    queryFn: () => apiGet(`/insights/product-demand?days=${days}`),
+    queryKey: ["product-demand", dateRange],
+    queryFn: () => {
+      const p = new URLSearchParams(dateRangeToParams(dateRange));
+      return apiGet(`/insights/product-demand?${p.toString()}`);
+    },
     staleTime: 60000,
   } as Parameters<typeof useQuery>[0]);
 
@@ -150,11 +153,11 @@ export default function ProductDemand() {
 
   const refresh = () => qc.invalidateQueries({ queryKey: ["product-demand"] });
 
-  // Filter trend data for chart — only show points with any activity when no data exists yet
+  // Filter trend data for chart — condense for large ranges
   const trendData = data?.trendData ?? [];
-  // Condense to weekly if days > 14
-  const condensedTrend = Number(days) > 14
-    ? trendData.filter((_, i) => i % Math.ceil(Number(days) / 14) === 0 || i === trendData.length - 1)
+  const effectiveDays = dateRange.mode === "preset" ? dateRange.days : trendData.length;
+  const condensedTrend = effectiveDays > 14
+    ? trendData.filter((_, i) => i % Math.ceil(effectiveDays / 14) === 0 || i === trendData.length - 1)
     : trendData;
 
   const topProducts = data?.topSearchedProducts ?? [];
@@ -178,19 +181,8 @@ export default function ProductDemand() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="14">Last 14 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="60">Last 60 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
           <Button variant="outline" size="sm" onClick={refresh} disabled={isFetching} className="gap-1.5">
             <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
@@ -341,7 +333,7 @@ export default function ProductDemand() {
                         <TrendingUp className="h-4 w-4 text-primary" />
                         Top Products in Demand
                       </CardTitle>
-                      <span className="text-xs text-muted-foreground">Last {days} days</span>
+                      <span className="text-xs text-muted-foreground">{dateRange.mode === "preset" ? `Last ${dateRange.days} days` : "Custom range"}</span>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-2.5">

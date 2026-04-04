@@ -69,14 +69,30 @@ router.post("/customers", requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
+function parseDateRange(query: Record<string, unknown>): { since: Date; until: Date; days: number } {
+  const until = new Date();
+  until.setHours(23, 59, 59, 999);
+
+  if (query.startDate && query.endDate) {
+    const since = new Date(query.startDate as string);
+    since.setHours(0, 0, 0, 0);
+    const end = new Date(query.endDate as string);
+    end.setHours(23, 59, 59, 999);
+    const days = Math.max(1, Math.ceil((end.getTime() - since.getTime()) / 86400000));
+    return { since, until: end, days };
+  }
+
+  const days = Math.max(1, parseInt((query.days as string) ?? "30"));
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  since.setHours(0, 0, 0, 0);
+  return { since, until, days };
+}
+
 router.get("/customers/analytics/summary", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const days = parseInt((req.query.days as string) ?? "30");
+    const { since, until, days } = parseDateRange(req.query as Record<string, unknown>);
     const channel = req.query.channel as string | undefined;
-
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    since.setHours(0, 0, 0, 0);
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -112,18 +128,21 @@ router.get("/customers/analytics/summary", requireAuth, async (req: AuthRequest,
     const baseTotal = await Customer.count({ where: { ...channelFilter, createdAt: { [Op.lt]: since } } });
     let runningTotal = baseTotal;
 
-    for (let i = days - 1; i >= 0; i--) {
-      const day = new Date();
-      day.setDate(day.getDate() - i);
-      day.setHours(0, 0, 0, 0);
-      const next = new Date(day);
-      next.setDate(next.getDate() + 1);
+    // Condense to weekly buckets when range > 90 days
+    const bucketSize = days > 90 ? 7 : 1;
+    let cursor = new Date(since);
+    while (cursor <= until) {
+      const bucketEnd = new Date(cursor);
+      bucketEnd.setDate(bucketEnd.getDate() + bucketSize);
+      if (bucketEnd > until) bucketEnd.setTime(until.getTime());
 
-      const dayCount = await Customer.count({ where: { ...channelFilter, createdAt: { [Op.between]: [day, next] } } });
+      const dayCount = await Customer.count({ where: { ...channelFilter, createdAt: { [Op.between]: [cursor, bucketEnd] } } });
       runningTotal += dayCount;
 
-      newContactsTrend.push({ date: day.toLocaleDateString("en-US", { month: "short", day: "numeric" }), count: dayCount });
-      totalGrowthTrend.push({ date: day.toLocaleDateString("en-US", { month: "short", day: "numeric" }), total: runningTotal });
+      newContactsTrend.push({ date: cursor.toLocaleDateString("en-US", { month: "short", day: "numeric" }), count: dayCount });
+      totalGrowthTrend.push({ date: cursor.toLocaleDateString("en-US", { month: "short", day: "numeric" }), total: runningTotal });
+
+      cursor.setDate(cursor.getDate() + bucketSize);
     }
 
     // Per-platform stats
@@ -138,7 +157,7 @@ router.get("/customers/analytics/summary", requireAuth, async (req: AuthRequest,
 
     // Growth summary stats
     const activeInPeriod = await Conversation.count({
-      where: { updatedAt: { [Op.gte]: since } },
+      where: { updatedAt: { [Op.between]: [since, until] } },
       distinct: true,
       col: "customer_id",
     });

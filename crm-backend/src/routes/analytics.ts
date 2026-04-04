@@ -5,18 +5,37 @@ import { requireAuth, AuthRequest } from "../middlewares/auth.js";
 
 const router = Router();
 
+function parseDateRange(query: Record<string, unknown>): { since: Date; until: Date; days: number } {
+  const until = new Date();
+  until.setHours(23, 59, 59, 999);
+
+  if (query.startDate && query.endDate) {
+    const since = new Date(query.startDate as string);
+    since.setHours(0, 0, 0, 0);
+    const end = new Date(query.endDate as string);
+    end.setHours(23, 59, 59, 999);
+    const days = Math.max(1, Math.ceil((end.getTime() - since.getTime()) / 86400000));
+    return { since, until: end, days };
+  }
+
+  const days = Math.max(1, parseInt((query.days as string) ?? "30"));
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  since.setHours(0, 0, 0, 0);
+  return { since, until, days };
+}
+
 router.get("/analytics", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const days = parseInt((req.query.days as string) ?? "30");
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    since.setHours(0, 0, 0, 0);
+    const { since, until, days } = parseDateRange(req.query as Record<string, unknown>);
+
+    const dateFilter = { [Op.between]: [since, until] };
 
     // ── Summary counts ────────────────────────────────────────────────────
     const [totalReceived, totalSent, aiMessages] = await Promise.all([
-      Message.count({ where: { sender: "customer", createdAt: { [Op.gte]: since } } }),
-      Message.count({ where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.gte]: since } } }),
-      Message.count({ where: { sender: "bot", createdAt: { [Op.gte]: since } } }),
+      Message.count({ where: { sender: "customer", createdAt: dateFilter } }),
+      Message.count({ where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: dateFilter } }),
+      Message.count({ where: { sender: "bot", createdAt: dateFilter } }),
     ]);
 
     // ── Top channel by conversation count ─────────────────────────────────
@@ -30,24 +49,27 @@ router.get("/analytics", requireAuth, async (req: AuthRequest, res) => {
     const topChannelRow = channelVolumes[0] ?? { channel: "whatsapp", cnt: "0" };
 
     // ── Daily trend (received vs sent) ────────────────────────────────────
+    // Condense to weekly buckets when range > 90 days for readability
+    const bucketSize = days > 90 ? 7 : 1;
     const dailyTrend: Array<{ date: string; received: number; sent: number }> = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const day = new Date();
-      day.setDate(day.getDate() - i);
-      day.setHours(0, 0, 0, 0);
-      const next = new Date(day);
-      next.setDate(next.getDate() + 1);
+    let cursor = new Date(since);
+    while (cursor <= until) {
+      const bucketEnd = new Date(cursor);
+      bucketEnd.setDate(bucketEnd.getDate() + bucketSize);
+      if (bucketEnd > until) bucketEnd.setTime(until.getTime());
 
       const [recv, sent] = await Promise.all([
-        Message.count({ where: { sender: "customer", createdAt: { [Op.between]: [day, next] } } }),
-        Message.count({ where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.between]: [day, next] } } }),
+        Message.count({ where: { sender: "customer", createdAt: { [Op.between]: [cursor, bucketEnd] } } }),
+        Message.count({ where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.between]: [cursor, bucketEnd] } } }),
       ]);
 
       dailyTrend.push({
-        date: day.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        date: cursor.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
         received: recv,
         sent,
       });
+
+      cursor.setDate(cursor.getDate() + bucketSize);
     }
 
     // ── Per-channel stats ─────────────────────────────────────────────────
@@ -63,9 +85,9 @@ router.get("/analytics", requireAuth, async (req: AuthRequest, res) => {
         }
 
         const [received, sent, ai] = await Promise.all([
-          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: "customer", createdAt: { [Op.gte]: since } } }),
-          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.gte]: since } } }),
-          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: "bot", createdAt: { [Op.gte]: since } } }),
+          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: "customer", createdAt: dateFilter } }),
+          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: { [Op.in]: ["agent", "bot"] }, createdAt: dateFilter } }),
+          Message.count({ where: { conversationId: { [Op.in]: convIds }, sender: "bot", createdAt: dateFilter } }),
         ]);
 
         return { channel, received, sent, aiMessages: ai };

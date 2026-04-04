@@ -5,6 +5,26 @@ import { requireAuth, AuthRequest } from "../middlewares/auth.js";
 
 const router = Router();
 
+function parseDateRange(query: Record<string, unknown>): { since: Date; until: Date; days: number } {
+  const until = new Date();
+  until.setHours(23, 59, 59, 999);
+
+  if (query.startDate && query.endDate) {
+    const since = new Date(query.startDate as string);
+    since.setHours(0, 0, 0, 0);
+    const end = new Date(query.endDate as string);
+    end.setHours(23, 59, 59, 999);
+    const days = Math.max(1, Math.ceil((end.getTime() - since.getTime()) / 86400000));
+    return { since, until: end, days };
+  }
+
+  const days = Math.max(1, parseInt((query.days as string) ?? "30"));
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  since.setHours(0, 0, 0, 0);
+  return { since, until, days };
+}
+
 // ── Keyword taxonomy ──────────────────────────────────────────────────────────
 
 const ISSUE_CATEGORIES: Record<string, { keywords: string[]; color: string; icon: string }> = {
@@ -108,14 +128,11 @@ function categoryScore(text: string): Record<string, number> {
 
 router.get("/insights/customer", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const days = parseInt((req.query.days as string) ?? "30");
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    since.setHours(0, 0, 0, 0);
+    const { since, until, days } = parseDateRange(req.query as Record<string, unknown>);
 
     // Fetch all customer messages in the period
     const messages = await Message.findAll({
-      where: { sender: "customer", createdAt: { [Op.gte]: since } },
+      where: { sender: "customer", createdAt: { [Op.between]: [since, until] } },
       attributes: ["id", "conversationId", "content", "createdAt"],
       order: [["createdAt", "DESC"]],
       limit: 5000,
@@ -391,14 +408,11 @@ function normaliseTerm(term: string): string {
 
 router.get("/insights/product-demand", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const days = parseInt((req.query.days as string) ?? "30");
-    const since = new Date();
-    since.setDate(since.getDate() - days);
-    since.setHours(0, 0, 0, 0);
+    const { since, until, days } = parseDateRange(req.query as Record<string, unknown>);
 
     // Fetch all customer messages in the period
     const customerMessages = await Message.findAll({
-      where: { sender: "customer", createdAt: { [Op.gte]: since } },
+      where: { sender: "customer", createdAt: { [Op.between]: [since, until] } },
       attributes: ["id", "conversationId", "content", "createdAt"],
       order: [["createdAt", "ASC"]],
       limit: 8000,
@@ -406,7 +420,7 @@ router.get("/insights/product-demand", requireAuth, async (req: AuthRequest, res
 
     // Fetch all agent/bot messages (for unavailability detection)
     const agentMessages = await Message.findAll({
-      where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.gte]: since } },
+      where: { sender: { [Op.in]: ["agent", "bot"] }, createdAt: { [Op.between]: [since, until] } },
       attributes: ["id", "conversationId", "content", "createdAt"],
       order: [["createdAt", "ASC"]],
       limit: 8000,
@@ -488,8 +502,9 @@ router.get("/insights/product-demand", requireAuth, async (req: AuthRequest, res
     const trendMap: Record<string, { searches: number; notAvailable: number }> = {};
 
     // Initialise all days in range
-    for (let d = 0; d < days; d++) {
+    for (let d = 0; d <= days; d++) {
       const dt = new Date(since.getTime() + d * dayMs);
+      if (dt > until) break;
       const key = dt.toISOString().slice(0, 10);
       trendMap[key] = { searches: 0, notAvailable: 0 };
     }

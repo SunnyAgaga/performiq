@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateRangeFilter, DateRange, dateRangeToParams, DEFAULT_DATE_RANGE, dateRangeLabel } from "@/components/date-range-filter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -130,13 +130,16 @@ function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: strin
 
 export default function Insights() {
   const { toast } = useToast();
-  const [days, setDays] = useState("30");
+  const [dateRange, setDateRange] = useState<DateRange>(DEFAULT_DATE_RANGE);
   const [aiSummary, setAiSummary] = useState<AiSummaryData | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
   const { data, isLoading, refetch, isRefetching } = useQuery<CustomerInsights>({
-    queryKey: ["customer-insights", days],
-    queryFn: () => apiGet(`/insights/customer?days=${days}`),
+    queryKey: ["customer-insights", dateRange],
+    queryFn: () => {
+      const p = new URLSearchParams(dateRangeToParams(dateRange));
+      return apiGet(`/insights/customer?${p.toString()}`);
+    },
   });
 
   const runAiSummary = async () => {
@@ -145,6 +148,7 @@ export default function Insights() {
     try {
       const token = localStorage.getItem("crm_token");
       const baseUrl = getBaseUrl();
+      const days = dateRange.mode === "preset" ? dateRange.days : 30;
       const res = await fetch(`${baseUrl}/insights/ai-summary`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -174,19 +178,8 @@ export default function Insights() {
           </h1>
           <p className="text-muted-foreground mt-1">Track customer questions, top issues, product mentions, and compliance flags.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-36">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="14">Last 14 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="60">Last 60 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
           <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isRefetching}>
             <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
           </Button>

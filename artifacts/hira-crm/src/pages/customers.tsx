@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DateRangeFilter, DateRange, dateRangeToParams, DEFAULT_DATE_RANGE } from "@/components/date-range-filter";
 import {
   Search, Download, Filter, Mail, Phone, MessageSquare, Loader2,
   Users, UserPlus, Calendar, TrendingUp, RefreshCw, Instagram, Facebook, Activity,
@@ -111,14 +112,16 @@ function MiniTrendCard({ title, dataKey, color, data }: {
 
 function ContactsAnalyticsTab() {
   const qc = useQueryClient();
-  const [days, setDays] = useState("30");
+  const [dateRange, setDateRange] = useState<DateRange>(DEFAULT_DATE_RANGE);
   const [platformFilter, setPlatformFilter] = useState("all");
   const [refreshKey, setRefreshKey] = useState(0);
 
-  const params = new URLSearchParams({ days, channel: platformFilter });
   const { data, isLoading, isFetching } = useQuery<ContactsAnalytics>({
-    queryKey: ["contacts-analytics", days, platformFilter, refreshKey],
-    queryFn: () => apiGet(`/customers/analytics/summary?${params.toString()}`),
+    queryKey: ["contacts-analytics", dateRange, platformFilter, refreshKey],
+    queryFn: () => {
+      const p = new URLSearchParams({ ...dateRangeToParams(dateRange), channel: platformFilter });
+      return apiGet(`/customers/analytics/summary?${p.toString()}`);
+    },
     staleTime: 60000,
   });
 
@@ -153,16 +156,7 @@ function ContactsAnalyticsTab() {
               <SelectItem value="instagram">Instagram</SelectItem>
             </SelectContent>
           </Select>
-          <Select value={days} onValueChange={setDays}>
-            <SelectTrigger className="w-[140px] h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="7">Last 7 days</SelectItem>
-              <SelectItem value="30">Last 30 days</SelectItem>
-              <SelectItem value="90">Last 90 days</SelectItem>
-            </SelectContent>
-          </Select>
+          <DateRangeFilter value={dateRange} onChange={setDateRange} />
           <Button variant="outline" size="sm" onClick={handleRefresh} className="gap-2 h-9" data-testid="button-refresh-contacts-analytics">
             <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
             Refresh
