@@ -1,12 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { setToken, clearToken, apiGet } from "./api";
 
-interface CrmAgent {
+export interface CrmAgent {
   id: number;
   name: string;
   email: string;
   role: string;
   avatar: string | null;
+  allowedMenus: string[] | null;
 }
 
 interface AuthContextType {

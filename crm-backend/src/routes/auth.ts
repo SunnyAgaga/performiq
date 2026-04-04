@@ -39,6 +39,7 @@ router.post("/auth/login", async (req, res) => {
         email: agent.email,
         role: agent.role,
         avatar: agent.avatar,
+        allowedMenus: agent.allowedMenus,
       },
     });
   } catch (err) {

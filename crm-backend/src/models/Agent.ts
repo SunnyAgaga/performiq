@@ -1,14 +1,17 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../lib/database.js";
 
+export type AgentRole = "super_admin" | "admin" | "agent" | "supervisor";
+
 export interface AgentAttributes {
   id: number;
   name: string;
   email: string;
   passwordHash: string;
-  role: "admin" | "agent" | "supervisor";
+  role: AgentRole;
   avatar: string | null;
   isActive: boolean;
+  allowedMenus: string[] | null;
   activeConversations: number;
   resolvedToday: number;
   rating: number;
@@ -18,16 +21,17 @@ export interface AgentAttributes {
 }
 
 export interface AgentCreationAttributes
-  extends Optional<AgentAttributes, "id" | "avatar" | "isActive" | "activeConversations" | "resolvedToday" | "rating" | "lastActiveAt"> {}
+  extends Optional<AgentAttributes, "id" | "avatar" | "isActive" | "allowedMenus" | "activeConversations" | "resolvedToday" | "rating" | "lastActiveAt"> {}
 
 export class Agent extends Model<AgentAttributes, AgentCreationAttributes> implements AgentAttributes {
   declare id: number;
   declare name: string;
   declare email: string;
   declare passwordHash: string;
-  declare role: "admin" | "agent" | "supervisor";
+  declare role: AgentRole;
   declare avatar: string | null;
   declare isActive: boolean;
+  declare allowedMenus: string[] | null;
   declare activeConversations: number;
   declare resolvedToday: number;
   declare rating: number;
@@ -42,9 +46,10 @@ Agent.init(
     name: { type: DataTypes.STRING(100), allowNull: false },
     email: { type: DataTypes.STRING(255), allowNull: false, unique: true },
     passwordHash: { type: DataTypes.STRING(255), allowNull: false, field: "password_hash" },
-    role: { type: DataTypes.ENUM("admin", "agent", "supervisor"), allowNull: false, defaultValue: "agent" },
+    role: { type: DataTypes.ENUM("super_admin", "admin", "agent", "supervisor"), allowNull: false, defaultValue: "agent" },
     avatar: { type: DataTypes.STRING(500), allowNull: true },
     isActive: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true, field: "is_active" },
+    allowedMenus: { type: DataTypes.JSON, allowNull: true, defaultValue: null, field: "allowed_menus" },
     activeConversations: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "active_conversations" },
     resolvedToday: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "resolved_today" },
     rating: { type: DataTypes.FLOAT, allowNull: false, defaultValue: 5.0 },

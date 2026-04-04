@@ -2,17 +2,21 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { Agent } from "../models/index.js";
 import { requireAuth, requireAdmin, AuthRequest } from "../middlewares/auth.js";
+import type { AgentAttributes } from "../models/Agent.js";
 
 const router = Router();
 
-router.get("/agents", requireAuth, async (req: AuthRequest, res) => {
+function isSuperAdmin(role: string) { return role === "super_admin"; }
+function isAdminOrAbove(role: string) { return role === "admin" || role === "super_admin"; }
+
+router.get("/agents", requireAuth, async (_req: AuthRequest, res) => {
   try {
     const agents = await Agent.findAll({
-      attributes: ["id", "name", "email", "role", "avatar", "isActive", "activeConversations", "resolvedToday", "rating", "createdAt"],
-      order: [["name", "ASC"]],
+      attributes: ["id", "name", "email", "role", "avatar", "isActive", "allowedMenus", "activeConversations", "resolvedToday", "rating", "createdAt"],
+      order: [["createdAt", "ASC"]],
     });
     res.json(agents);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -24,6 +28,18 @@ router.post("/agents", requireAuth, requireAdmin, async (req: AuthRequest, res) 
       res.status(400).json({ error: "Name, email, and password are required" });
       return;
     }
+
+    const requestingRole = req.agent!.role;
+
+    if (role === "super_admin") {
+      res.status(403).json({ error: "Cannot create a super admin account" });
+      return;
+    }
+    if (role === "admin" && !isSuperAdmin(requestingRole)) {
+      res.status(403).json({ error: "Only super admins can create admin accounts" });
+      return;
+    }
+
     const existing = await Agent.findOne({ where: { email: email.toLowerCase() } });
     if (existing) {
       res.status(409).json({ error: "Email already in use" });
@@ -33,29 +49,76 @@ router.post("/agents", requireAuth, requireAdmin, async (req: AuthRequest, res) 
     const agent = await Agent.create({ name, email: email.toLowerCase(), passwordHash, role: role ?? "agent" });
     const { passwordHash: _, ...safe } = agent.toJSON() as AgentAttributes;
     res.status(201).json(safe);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
 router.put("/agents/:id", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
-    const agent = await Agent.findByPk(req.params.id);
-    if (!agent) {
-      res.status(404).json({ error: "Agent not found" });
+    const target = await Agent.findByPk(req.params.id);
+    if (!target) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    const requestingRole = req.agent!.role;
+
+    if (isSuperAdmin(target.role)) {
+      res.status(403).json({ error: "Super admin accounts cannot be modified" });
       return;
     }
+    if (isAdminOrAbove(target.role) && !isSuperAdmin(requestingRole)) {
+      res.status(403).json({ error: "Only super admins can modify admin accounts" });
+      return;
+    }
+
     const { name, role, isActive } = req.body;
-    if (name) agent.name = name;
-    if (role) agent.role = role;
-    if (isActive !== undefined) agent.isActive = isActive;
-    await agent.save();
-    const { passwordHash: _, ...safe } = agent.toJSON() as AgentAttributes;
+
+    if (role === "super_admin") {
+      res.status(403).json({ error: "Cannot assign super admin role" });
+      return;
+    }
+    if (role === "admin" && !isSuperAdmin(requestingRole)) {
+      res.status(403).json({ error: "Only super admins can promote users to admin" });
+      return;
+    }
+
+    if (name !== undefined) target.name = name;
+    if (role !== undefined) target.role = role;
+    if (isActive !== undefined) target.isActive = isActive;
+    await target.save();
+    const { passwordHash: _, ...safe } = target.toJSON() as AgentAttributes;
     res.json(safe);
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: "Internal server error" });
   }
 });
 
-import type { AgentAttributes } from "../models/Agent.js";
+router.put("/agents/:id/menus", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const target = await Agent.findByPk(req.params.id);
+    if (!target) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    const requestingRole = req.agent!.role;
+
+    if (isSuperAdmin(target.role)) {
+      res.status(403).json({ error: "Cannot restrict super admin menu access" });
+      return;
+    }
+    if (isAdminOrAbove(target.role) && !isSuperAdmin(requestingRole)) {
+      res.status(403).json({ error: "Only super admins can modify admin menu access" });
+      return;
+    }
+
+    const { allowedMenus } = req.body;
+    if (allowedMenus !== null && !Array.isArray(allowedMenus)) {
+      res.status(400).json({ error: "allowedMenus must be an array or null" });
+      return;
+    }
+
+    await target.update({ allowedMenus: allowedMenus ?? null });
+    res.json({ success: true, allowedMenus: target.allowedMenus });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

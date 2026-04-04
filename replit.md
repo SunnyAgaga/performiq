@@ -56,6 +56,7 @@ The monorepo contains:
 - HiraCRM includes a sidebar navigation, KPI cards, charts, data tables with filtering, and modal dialogs for interactive features.
 - Face capture for attendance uses webcam selfies with guided face oval and review mechanisms for compliance.
 - HiraCRM Appearance/Branding: Admin-only Settings section for customizing app name, primary color, sidebar color, logo, and background image. BrandingSettings Sequelize model stores config in `crm_branding_settings`. BrandingContext applies CSS variables (--primary, --sidebar) to `document.documentElement` and exposes `setBrandingData()` for live sidebar updates without page reload. Logo and background are stored as base64 data URLs (max 8MB per upload).
+- HiraCRM Super Admin & Menu Access: Role hierarchy is `super_admin` > `admin` > `supervisor` > `agent`. Agent model has `allowedMenus: string[] | null` column — `null` means full access; an array limits sidebar menus. Super admin account seeded as superadmin@hiracrm.com / superadmin123. Admin page shows locked rows for super_admin/admin accounts; admins can assign per-user menu access via a modal with 14 checkboxes (Agent Tasks + Back Office categories). The sidebar filters nav items per `allowedMenus`. Menu slugs: dashboard, inbox, follow-ups, feedback, customers, clock-in, ai-chat, campaigns, analytics, intelligence, transcripts, product-demand, channels, settings.
 
 # External Dependencies
 

@@ -28,6 +28,10 @@ async function start() {
     `);
   } catch (_) {}
 
+  try {
+    await sequelize.query(`ALTER TYPE "enum_crm_agents_role" ADD VALUE IF NOT EXISTS 'super_admin';`);
+  } catch (_) {}
+
   await sequelize.sync({ alter: true });
   logger.info("CRM database tables synced");
 

@@ -44,7 +44,7 @@ function AdminRoute({ component: Component }: { component: React.ComponentType }
   const { agent, isLoading } = useAuth();
   if (isLoading) return null;
   if (!agent) return <Redirect to="/login" />;
-  if (agent.role !== "admin") return <Redirect to="/" />;
+  if (agent.role !== "admin" && agent.role !== "super_admin") return <Redirect to="/" />;
   return (
     <Layout>
       <Component />

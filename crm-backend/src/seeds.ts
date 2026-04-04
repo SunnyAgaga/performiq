@@ -2,8 +2,26 @@ import bcrypt from "bcryptjs";
 import { Agent, Customer, Conversation, Message, Campaign, Feedback } from "./models/index.js";
 import { logger } from "./lib/logger.js";
 
+export async function ensureSuperAdmin(): Promise<void> {
+  const existing = await Agent.findOne({ where: { role: "super_admin" } });
+  if (existing) return;
+
+  const passwordHash = await bcrypt.hash("superadmin123", 10);
+  await Agent.create({
+    name: "Super Admin",
+    email: "superadmin@hiracrm.com",
+    passwordHash,
+    role: "super_admin",
+    isActive: true,
+    allowedMenus: null,
+  });
+  logger.info("Super admin account created: superadmin@hiracrm.com / superadmin123");
+}
+
 export async function seedDatabase(): Promise<void> {
-  const agentCount = await Agent.count();
+  await ensureSuperAdmin();
+
+  const agentCount = await Agent.count({ where: { role: ["admin", "agent", "supervisor"] } });
   if (agentCount > 0) {
     logger.info("CRM database already seeded, skipping");
     return;

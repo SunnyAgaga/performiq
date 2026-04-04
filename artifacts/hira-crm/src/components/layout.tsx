@@ -25,36 +25,49 @@ import { useAuth } from "@/lib/auth-context";
 import { useBranding } from "@/lib/branding-context";
 import { clearToken } from "@/lib/api";
 
+type NavItem = { name: string; href: string; icon: React.ElementType; slug: string };
+
+function filterByMenus(items: NavItem[], allowedMenus: string[] | null): NavItem[] {
+  if (!allowedMenus) return items;
+  return items.filter((item) => allowedMenus.includes(item.slug));
+}
+
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { agent } = useAuth();
   const branding = useBranding();
 
-  const navigation = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Inbox", href: "/inbox", icon: Inbox },
-    { name: "Follow-ups", href: "/follow-ups", icon: CalendarClock },
-    { name: "Feedback", href: "/feedback", icon: Star },
-    { name: "Customers", href: "/customers", icon: Users },
-    { name: "Campaigns", href: "/campaigns", icon: Megaphone },
-    { name: "Analytics", href: "/analytics", icon: LineChart },
-    { name: "Intelligence", href: "/insights", icon: Brain },
-    { name: "Transcripts", href: "/transcripts", icon: ScrollText },
-    { name: "Product Demand", href: "/product-demand", icon: PackageSearch },
-    { name: "Clock In", href: "/clock-in", icon: Clock },
+  const isSuperAdmin = agent?.role === "super_admin";
+  const isAdmin = agent?.role === "admin" || isSuperAdmin;
+  const allowedMenus = agent?.allowedMenus ?? null;
+
+  const coreNav: NavItem[] = [
+    { name: "Dashboard", href: "/", icon: LayoutDashboard, slug: "dashboard" },
+    { name: "Inbox", href: "/inbox", icon: Inbox, slug: "inbox" },
+    { name: "Follow-ups", href: "/follow-ups", icon: CalendarClock, slug: "follow-ups" },
+    { name: "Feedback", href: "/feedback", icon: Star, slug: "feedback" },
+    { name: "Customers", href: "/customers", icon: Users, slug: "customers" },
+    { name: "Campaigns", href: "/campaigns", icon: Megaphone, slug: "campaigns" },
+    { name: "Analytics", href: "/analytics", icon: LineChart, slug: "analytics" },
+    { name: "Intelligence", href: "/insights", icon: Brain, slug: "intelligence" },
+    { name: "Transcripts", href: "/transcripts", icon: ScrollText, slug: "transcripts" },
+    { name: "Product Demand", href: "/product-demand", icon: PackageSearch, slug: "product-demand" },
+    { name: "Clock In", href: "/clock-in", icon: Clock, slug: "clock-in" },
   ];
 
-  const adminNav = agent?.role === "admin"
-    ? [{ name: "User Management", href: "/admin", icon: ShieldCheck }]
+  const adminNav: NavItem[] = isAdmin
+    ? [{ name: "User Management", href: "/admin", icon: ShieldCheck, slug: "admin" }]
     : [];
 
-  const toolsNav = [
-    { name: "AI Assistant", href: "/ai-chat", icon: Bot },
-    { name: "Channels", href: "/channels", icon: Plug },
-    { name: "Settings", href: "/settings", icon: Settings },
+  const toolsNav: NavItem[] = [
+    { name: "AI Assistant", href: "/ai-chat", icon: Bot, slug: "ai-chat" },
+    { name: "Channels", href: "/channels", icon: Plug, slug: "channels" },
+    { name: "Settings", href: "/settings", icon: Settings, slug: "settings" },
   ];
 
-  const allNav = [...navigation, ...adminNav, ...toolsNav];
+  const visibleCore = filterByMenus(coreNav, allowedMenus);
+  const visibleTools = filterByMenus(toolsNav, allowedMenus);
+  const allNav = [...visibleCore, ...adminNav, ...visibleTools];
 
   const handleLogout = () => {
     clearToken();
@@ -104,8 +117,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2">Core</p>
-          {navigation.map((item) => <NavItem key={item.name} item={item} />)}
+          {visibleCore.length > 0 && (
+            <>
+              <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2">Core</p>
+              {visibleCore.map((item) => <NavItem key={item.name} item={item} />)}
+            </>
+          )}
 
           {adminNav.length > 0 && (
             <>
@@ -114,8 +131,12 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </>
           )}
 
-          <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2 mt-3">Tools</p>
-          {toolsNav.map((item) => <NavItem key={item.name} item={item} />)}
+          {visibleTools.length > 0 && (
+            <>
+              <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2 mt-3">Tools</p>
+              {visibleTools.map((item) => <NavItem key={item.name} item={item} />)}
+            </>
+          )}
         </nav>
 
         <div className="p-3 border-t border-sidebar-border flex items-center gap-3">
