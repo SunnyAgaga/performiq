@@ -332,7 +332,7 @@ export default function FollowUpsPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
-                  className="pl-9"
+                  className="pl-9 pr-9"
                   placeholder="Search by name, email, or phone..."
                   value={selectedCustomer ? selectedCustomer.name : customerSearch}
                   onChange={(e) => {
@@ -342,6 +342,14 @@ export default function FollowUpsPage() {
                   }}
                   onFocus={() => setShowCustomerDropdown(true)}
                 />
+                <button
+                  type="button"
+                  className="absolute right-2.5 top-2 h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setShowCustomerDropdown((prev) => !prev)}
+                  tabIndex={-1}
+                >
+                  <ChevronDown className={`h-4 w-4 transition-transform duration-150 ${showCustomerDropdown ? "rotate-180" : ""}`} />
+                </button>
                 {showCustomerDropdown && filteredCustomers.length > 0 && !selectedCustomer && (
                   <div className="absolute z-50 mt-1 w-full bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
                     {filteredCustomers.map((c) => {
