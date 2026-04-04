@@ -61,10 +61,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     icon: LineChart,
     slug: "analytics",
     children: [
-      { name: "Overview",         href: "/analytics",      icon: LineChart,     slug: "analytics" },
-      { name: "Intelligence",     href: "/insights",       icon: Brain,         slug: "intelligence" },
-      { name: "Product Demand",   href: "/product-demand", icon: PackageSearch, slug: "product-demand" },
-      { name: "Transcripts",      href: "/transcripts",    icon: ScrollText,    slug: "transcripts" },
+      { name: "Overview",            href: "/analytics",            icon: LineChart,     slug: "analytics" },
+      { name: "Intelligence",        href: "/insights",             icon: Brain,         slug: "intelligence" },
+      { name: "Product Demand",      href: "/product-demand",       icon: PackageSearch, slug: "product-demand" },
+      { name: "Transcripts",         href: "/transcripts",          icon: ScrollText,    slug: "transcripts" },
+      { name: "Contacts Analytics",  href: "/contacts-analytics",   icon: Users,         slug: "contacts-analytics" },
     ],
   };
 
