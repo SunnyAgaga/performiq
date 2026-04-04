@@ -125,6 +125,7 @@ router.get("/transcripts/agent-stats", requireAuth, async (req, res) => {
     const { period = "weekly" } = req.query as { period?: string };
     const cutoff = new Date();
     if (period === "monthly") cutoff.setDate(cutoff.getDate() - 30);
+    else if (period === "daily") cutoff.setHours(cutoff.getHours() - 24);
     else cutoff.setDate(cutoff.getDate() - 7);
 
     const agents = await Agent.findAll({ where: { isActive: true }, attributes: ["id", "name", "email", "role", "avatar"] });
@@ -199,8 +200,9 @@ router.get("/transcripts/agent-stats", requireAuth, async (req, res) => {
             ? feedbackRows.reduce((sum, f) => sum + f.rating, 0) / feedbackRows.length
             : null;
 
-        // KPI targets
-        const kpiTarget = await AgentKpi.findOne({ where: { agentId: agent.id, period } });
+        // KPI targets — daily view reuses weekly targets
+        const kpiPeriod = period === "daily" ? "weekly" : period;
+        const kpiTarget = await AgentKpi.findOne({ where: { agentId: agent.id, period: kpiPeriod } });
 
         return {
           agent: agent.toJSON(),

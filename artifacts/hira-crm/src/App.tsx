@@ -23,6 +23,7 @@ import Transcripts from "@/pages/transcripts";
 import ProductDemand from "@/pages/product-demand";
 import ClockIn from "@/pages/clock-in";
 import PublicFeedback from "@/pages/public-feedback";
+import KpiPage from "@/pages/kpi";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -72,6 +73,7 @@ function Router() {
       <Route path="/transcripts" component={() => <PrivateRoute component={Transcripts} />} />
       <Route path="/product-demand" component={() => <PrivateRoute component={ProductDemand} />} />
       <Route path="/clock-in" component={() => <PrivateRoute component={ClockIn} />} />
+      <Route path="/kpi" component={() => <PrivateRoute component={KpiPage} />} />
       <Route path="/feedback-form" component={PublicFeedback} />
       <Route component={NotFound} />
     </Switch>
