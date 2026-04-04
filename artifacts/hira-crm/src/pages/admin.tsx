@@ -366,7 +366,7 @@ export default function Admin() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="ce">Email Address</Label>
-                <Input id="ce" type="email" placeholder="sarah@hiracrm.com" value={createEmail}
+                <Input id="ce" type="email" placeholder="sarah@commscrm.com" value={createEmail}
                   onChange={(e) => setCreateEmail(e.target.value)} data-testid="input-create-email" />
               </div>
               <div className="space-y-2">

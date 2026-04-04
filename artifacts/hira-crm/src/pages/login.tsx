@@ -16,7 +16,7 @@ interface LoginResponse {
 export default function Login() {
   const { login } = useAuth();
   const [, setLocation] = useLocation();
-  const [email, setEmail] = useState("sarah@hiracrm.com");
+  const [email, setEmail] = useState("sarah@commscrm.com");
   const [password, setPassword] = useState("password");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -63,7 +63,7 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="agent@hiracrm.com"
+                  placeholder="agent@commscrm.com"
                   required
                   data-testid="input-email"
                 />
@@ -98,7 +98,7 @@ export default function Login() {
 
             <div className="mt-4 p-3 bg-muted/50 rounded-md text-xs text-muted-foreground">
               <p className="font-medium mb-1">Demo credentials:</p>
-              <p>Email: sarah@hiracrm.com</p>
+              <p>Email: sarah@commscrm.com</p>
               <p>Password: password</p>
             </div>
           </CardContent>

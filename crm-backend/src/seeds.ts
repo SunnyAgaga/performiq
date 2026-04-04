@@ -9,13 +9,13 @@ export async function ensureSuperAdmin(): Promise<void> {
   const passwordHash = await bcrypt.hash("superadmin123", 10);
   await Agent.create({
     name: "Super Admin",
-    email: "superadmin@hiracrm.com",
+    email: "superadmin@commscrm.com",
     passwordHash,
     role: "super_admin",
     isActive: true,
     allowedMenus: null,
   });
-  logger.info("Super admin account created: superadmin@hiracrm.com / superadmin123");
+  logger.info("Super admin account created: superadmin@commscrm.com / superadmin123");
 }
 
 export async function seedDatabase(): Promise<void> {
@@ -32,11 +32,11 @@ export async function seedDatabase(): Promise<void> {
   const passwordHash = await bcrypt.hash("password", 10);
 
   const agents = await Agent.bulkCreate([
-    { name: "Sarah Mitchell", email: "sarah@hiracrm.com", passwordHash, role: "admin", resolvedToday: 12, rating: 4.9, activeConversations: 3 },
-    { name: "James Okafor", email: "james@hiracrm.com", passwordHash, role: "agent", resolvedToday: 8, rating: 4.7, activeConversations: 5 },
-    { name: "Priya Sharma", email: "priya@hiracrm.com", passwordHash, role: "agent", resolvedToday: 15, rating: 4.8, activeConversations: 2 },
-    { name: "Carlos Rivera", email: "carlos@hiracrm.com", passwordHash, role: "supervisor", resolvedToday: 10, rating: 4.6, activeConversations: 4 },
-    { name: "Aisha Mensah", email: "aisha@hiracrm.com", passwordHash, role: "agent", resolvedToday: 6, rating: 4.5, activeConversations: 6 },
+    { name: "Sarah Mitchell", email: "sarah@commscrm.com", passwordHash, role: "admin", resolvedToday: 12, rating: 4.9, activeConversations: 3 },
+    { name: "James Okafor", email: "james@commscrm.com", passwordHash, role: "agent", resolvedToday: 8, rating: 4.7, activeConversations: 5 },
+    { name: "Priya Sharma", email: "priya@commscrm.com", passwordHash, role: "agent", resolvedToday: 15, rating: 4.8, activeConversations: 2 },
+    { name: "Carlos Rivera", email: "carlos@commscrm.com", passwordHash, role: "supervisor", resolvedToday: 10, rating: 4.6, activeConversations: 4 },
+    { name: "Aisha Mensah", email: "aisha@commscrm.com", passwordHash, role: "agent", resolvedToday: 6, rating: 4.5, activeConversations: 6 },
   ]);
 
   const customers = await Customer.bulkCreate([

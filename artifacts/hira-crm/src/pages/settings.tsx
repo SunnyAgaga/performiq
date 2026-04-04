@@ -596,7 +596,7 @@ export default function Settings() {
                     <DialogHeader><DialogTitle>Add New Agent</DialogTitle></DialogHeader>
                     <div className="space-y-4 py-4">
                       <div className="space-y-2"><Label>Full Name</Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Sarah Mitchell" /></div>
-                      <div className="space-y-2"><Label>Email Address</Label><Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="sarah@hiracrm.com" /></div>
+                      <div className="space-y-2"><Label>Email Address</Label><Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="sarah@commscrm.com" /></div>
                       <div className="space-y-2"><Label>Initial Password</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Minimum 8 characters" /></div>
                       <div className="space-y-2">
                         <Label>Role</Label>
