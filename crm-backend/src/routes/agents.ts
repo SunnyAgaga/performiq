@@ -23,7 +23,7 @@ router.get("/agents", requireAuth, async (_req: AuthRequest, res) => {
 
 router.post("/agents", requireAuth, requireAdmin, async (req: AuthRequest, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, allowedMenus } = req.body;
     if (!name || !email || !password) {
       res.status(400).json({ error: "Name, email, and password are required" });
       return;
@@ -40,13 +40,24 @@ router.post("/agents", requireAuth, requireAdmin, async (req: AuthRequest, res) 
       return;
     }
 
+    if (allowedMenus !== undefined && allowedMenus !== null && !Array.isArray(allowedMenus)) {
+      res.status(400).json({ error: "allowedMenus must be an array or null" });
+      return;
+    }
+
     const existing = await Agent.findOne({ where: { email: email.toLowerCase() } });
     if (existing) {
       res.status(409).json({ error: "Email already in use" });
       return;
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const agent = await Agent.create({ name, email: email.toLowerCase(), passwordHash, role: role ?? "agent" });
+    const agent = await Agent.create({
+      name,
+      email: email.toLowerCase(),
+      passwordHash,
+      role: role ?? "agent",
+      allowedMenus: allowedMenus ?? null,
+    });
     const { passwordHash: _, ...safe } = agent.toJSON() as AgentAttributes;
     res.status(201).json(safe);
   } catch {

@@ -45,7 +45,35 @@ interface BrandingData {
   backgroundData: string | null;
 }
 
-interface ApiAgent { id: number; name: string; email: string; role: string; isActive: boolean; }
+interface ApiAgent { id: number; name: string; email: string; role: string; isActive: boolean; allowedMenus: string[] | null; }
+
+// ── All menus available for permission control ────────────────────────────────
+const ALL_MENUS = [
+  // Core
+  { slug: "dashboard",          name: "Dashboard",          group: "Core" },
+  { slug: "inbox",              name: "Inbox",              group: "Core" },
+  { slug: "customers",          name: "Customers",          group: "Core" },
+  { slug: "follow-ups",         name: "Follow-ups",         group: "Core" },
+  { slug: "feedback",           name: "Feedback",           group: "Core" },
+  { slug: "campaigns",          name: "Campaigns",          group: "Core" },
+  { slug: "kpi",                name: "KPI Ranking",        group: "Core" },
+  { slug: "clock-in",           name: "Clock In",           group: "Core" },
+  // Analytics
+  { slug: "analytics",          name: "Overview",           group: "Analytics" },
+  { slug: "intelligence",       name: "Intelligence",       group: "Analytics" },
+  { slug: "product-demand",     name: "Product Demand",     group: "Analytics" },
+  { slug: "transcripts",        name: "Transcripts",        group: "Analytics" },
+  { slug: "contacts-analytics", name: "Contacts Analytics", group: "Analytics" },
+  // Tools
+  { slug: "ai-chat",            name: "AI Assistant",       group: "Tools" },
+  { slug: "channels",           name: "Channels",           group: "Tools" },
+  { slug: "settings",           name: "Settings",           group: "Tools" },
+  // Admin
+  { slug: "admin",              name: "User Management",    group: "Admin" },
+] as const;
+
+const MENU_GROUPS = ["Core", "Analytics", "Tools", "Admin"] as const;
+type MenuSlug = typeof ALL_MENUS[number]["slug"];
 
 type SettingsSection = "channels" | "automation" | "email" | "team" | "appearance" | "retention" | "followups";
 
@@ -81,6 +109,13 @@ export default function Settings() {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState("agent");
+  // Menu permissions for new agent
+  const [newCustomPerms, setNewCustomPerms] = useState(false);
+  const [newAllowedMenus, setNewAllowedMenus] = useState<MenuSlug[]>([...ALL_MENUS.map((m) => m.slug)]);
+  // Edit permissions dialog
+  const [permEditAgent, setPermEditAgent] = useState<ApiAgent | null>(null);
+  const [permMenus, setPermMenus] = useState<MenuSlug[]>([]);
+  const [permCustom, setPermCustom] = useState(false);
 
   const { data: agents = [], isLoading } = useQuery<ApiAgent[]>({
     queryKey: ["agents"],
@@ -93,6 +128,7 @@ export default function Settings() {
       qc.invalidateQueries({ queryKey: ["agents"] });
       setIsAddOpen(false);
       setNewName(""); setNewEmail(""); setNewPassword(""); setNewRole("agent");
+      setNewCustomPerms(false); setNewAllowedMenus([...ALL_MENUS.map((m) => m.slug)]);
       toast({ title: "Agent added", description: "New agent has been created." });
     },
     onError: (err: Error) => {
@@ -107,6 +143,41 @@ export default function Settings() {
       qc.invalidateQueries({ queryKey: ["agents"] });
     },
   });
+
+  const updateMenusMutation = useMutation({
+    mutationFn: ({ id, allowedMenus }: { id: number; allowedMenus: string[] | null }) =>
+      apiPut(`/agents/${id}/menus`, { allowedMenus }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agents"] });
+      setPermEditAgent(null);
+      toast({ title: "Permissions updated", description: "Menu access has been saved." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  function openPermEdit(agent: ApiAgent) {
+    setPermEditAgent(agent);
+    const menus = agent.allowedMenus;
+    if (menus === null) {
+      setPermCustom(false);
+      setPermMenus([...ALL_MENUS.map((m) => m.slug)] as MenuSlug[]);
+    } else {
+      setPermCustom(true);
+      setPermMenus(menus as MenuSlug[]);
+    }
+  }
+
+  function toggleMenu(list: MenuSlug[], slug: MenuSlug): MenuSlug[] {
+    return list.includes(slug) ? list.filter((s) => s !== slug) : [...list, slug];
+  }
+
+  function toggleGroupAll(list: MenuSlug[], group: string, checked: boolean): MenuSlug[] {
+    const groupSlugs = ALL_MENUS.filter((m) => m.group === group).map((m) => m.slug) as MenuSlug[];
+    if (checked) return [...new Set([...list, ...groupSlugs])];
+    return list.filter((s) => !groupSlugs.includes(s));
+  }
 
   // ── Branding state ─────────────────────────────────────────────────────────
   const [brandingName, setBrandingName] = useState("CommsCRM");
@@ -592,9 +663,9 @@ export default function Settings() {
                   <DialogTrigger asChild>
                     <Button size="sm" data-testid="button-add-agent">Add Agent</Button>
                   </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader><DialogTitle>Add New Agent</DialogTitle></DialogHeader>
-                    <div className="space-y-4 py-4">
+                  <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+                    <DialogHeader><DialogTitle>Add New User</DialogTitle></DialogHeader>
+                    <div className="space-y-4 py-2">
                       <div className="space-y-2"><Label>Full Name</Label><Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Sarah Mitchell" /></div>
                       <div className="space-y-2"><Label>Email Address</Label><Input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="sarah@commscrm.com" /></div>
                       <div className="space-y-2"><Label>Initial Password</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Minimum 8 characters" /></div>
@@ -609,11 +680,75 @@ export default function Settings() {
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {/* ── Menu Permissions ── */}
+                      <div className="border rounded-lg p-3 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium">Menu Permissions</p>
+                            <p className="text-xs text-muted-foreground">Control which pages this user can access</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">{newCustomPerms ? "Custom" : "Full Access"}</span>
+                            <Switch checked={newCustomPerms} onCheckedChange={(v) => {
+                              setNewCustomPerms(v);
+                              if (v) setNewAllowedMenus([...ALL_MENUS.map((m) => m.slug)]);
+                            }} />
+                          </div>
+                        </div>
+
+                        {newCustomPerms && (
+                          <div className="space-y-3 pt-1">
+                            {MENU_GROUPS.map((group) => {
+                              const groupMenus = ALL_MENUS.filter((m) => m.group === group);
+                              const allChecked = groupMenus.every((m) => newAllowedMenus.includes(m.slug));
+                              const someChecked = groupMenus.some((m) => newAllowedMenus.includes(m.slug));
+                              return (
+                                <div key={group}>
+                                  <div className="flex items-center gap-2 mb-1.5">
+                                    <Checkbox
+                                      id={`new-group-${group}`}
+                                      checked={allChecked}
+                                      className={someChecked && !allChecked ? "data-[state=unchecked]:bg-primary/20" : ""}
+                                      onCheckedChange={(v) => setNewAllowedMenus(toggleGroupAll(newAllowedMenus, group, !!v))}
+                                    />
+                                    <label htmlFor={`new-group-${group}`} className="text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer">{group}</label>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-1 pl-6">
+                                    {groupMenus.map((m) => (
+                                      <div key={m.slug} className="flex items-center gap-2">
+                                        <Checkbox
+                                          id={`new-${m.slug}`}
+                                          checked={newAllowedMenus.includes(m.slug)}
+                                          onCheckedChange={() => setNewAllowedMenus(toggleMenu(newAllowedMenus, m.slug))}
+                                        />
+                                        <label htmlFor={`new-${m.slug}`} className="text-sm cursor-pointer">{m.name}</label>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            <p className="text-xs text-muted-foreground pt-1">
+                              {newAllowedMenus.length} of {ALL_MENUS.length} pages selected
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setIsAddOpen(false)}>Cancel</Button>
-                      <Button disabled={!newName || !newEmail || !newPassword || addAgentMutation.isPending} onClick={() => addAgentMutation.mutate({ name: newName, email: newEmail, password: newPassword, role: newRole })}>
-                        {addAgentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add Agent"}
+                      <Button
+                        disabled={!newName || !newEmail || !newPassword || addAgentMutation.isPending}
+                        onClick={() => addAgentMutation.mutate({
+                          name: newName,
+                          email: newEmail,
+                          password: newPassword,
+                          role: newRole,
+                          allowedMenus: newCustomPerms ? newAllowedMenus : null,
+                        })}
+                      >
+                        {addAgentMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add User"}
                       </Button>
                     </DialogFooter>
                   </DialogContent>
@@ -636,7 +771,7 @@ export default function Settings() {
                               <div className="text-sm text-muted-foreground">{agent.email}</div>
                             </div>
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-2">
                             <Select defaultValue={agent.role} onValueChange={(val) => updateAgentMutation.mutate({ id: agent.id, role: val })}>
                               <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
                               <SelectContent>
@@ -645,7 +780,17 @@ export default function Settings() {
                                 <SelectItem value="agent">Agent</SelectItem>
                               </SelectContent>
                             </Select>
-                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" disabled={agent.id === currentAgent?.id}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1.5 text-xs"
+                              onClick={() => openPermEdit(agent)}
+                              title="Edit menu permissions"
+                            >
+                              <ShieldCheck className="h-3.5 w-3.5" />
+                              {agent.allowedMenus === null ? "Full Access" : `${agent.allowedMenus.length} pages`}
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive h-8 w-8" disabled={agent.id === currentAgent?.id}>
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -657,6 +802,83 @@ export default function Settings() {
               </Card>
             </>
           )}
+
+          {/* ── EDIT PERMISSIONS DIALOG ────────────────────────────────────── */}
+          <Dialog open={!!permEditAgent} onOpenChange={(open) => { if (!open) setPermEditAgent(null); }}>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Menu Permissions</DialogTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Choose which pages <strong>{permEditAgent?.name}</strong> can access.
+                </p>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="flex items-center justify-between border rounded-lg p-3">
+                  <div>
+                    <p className="text-sm font-medium">{permCustom ? "Custom permissions" : "Full access — all pages"}</p>
+                    <p className="text-xs text-muted-foreground">Toggle to restrict specific pages</p>
+                  </div>
+                  <Switch checked={permCustom} onCheckedChange={(v) => {
+                    setPermCustom(v);
+                    if (v) setPermMenus([...ALL_MENUS.map((m) => m.slug)] as MenuSlug[]);
+                  }} />
+                </div>
+
+                {permCustom && (
+                  <div className="space-y-3">
+                    {MENU_GROUPS.map((group) => {
+                      const groupMenus = ALL_MENUS.filter((m) => m.group === group);
+                      const allChecked = groupMenus.every((m) => permMenus.includes(m.slug as MenuSlug));
+                      const someChecked = groupMenus.some((m) => permMenus.includes(m.slug as MenuSlug));
+                      return (
+                        <div key={group} className="border rounded-md p-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Checkbox
+                              id={`perm-group-${group}`}
+                              checked={allChecked}
+                              className={someChecked && !allChecked ? "opacity-70" : ""}
+                              onCheckedChange={(v) => setPermMenus(toggleGroupAll(permMenus, group, !!v) as MenuSlug[])}
+                            />
+                            <label htmlFor={`perm-group-${group}`} className="text-xs font-semibold text-muted-foreground uppercase tracking-wide cursor-pointer">{group}</label>
+                            <Badge variant="secondary" className="ml-auto text-xs">
+                              {groupMenus.filter((m) => permMenus.includes(m.slug as MenuSlug)).length}/{groupMenus.length}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5 pl-6">
+                            {groupMenus.map((m) => (
+                              <div key={m.slug} className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`perm-${m.slug}`}
+                                  checked={permMenus.includes(m.slug as MenuSlug)}
+                                  onCheckedChange={() => setPermMenus(toggleMenu(permMenus, m.slug as MenuSlug))}
+                                />
+                                <label htmlFor={`perm-${m.slug}`} className="text-sm cursor-pointer">{m.name}</label>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <p className="text-xs text-muted-foreground">
+                      {permMenus.length} of {ALL_MENUS.length} pages selected
+                    </p>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPermEditAgent(null)}>Cancel</Button>
+                <Button
+                  disabled={updateMenusMutation.isPending}
+                  onClick={() => permEditAgent && updateMenusMutation.mutate({
+                    id: permEditAgent.id,
+                    allowedMenus: permCustom ? permMenus : null,
+                  })}
+                >
+                  {updateMenusMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save Permissions"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           {/* ── APPEARANCE ─────────────────────────────────────────────────── */}
           {activeSection === "appearance" && (currentAgent?.role === "admin" || currentAgent?.role === "super_admin") && (
