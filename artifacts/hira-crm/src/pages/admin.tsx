@@ -19,10 +19,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Users, UserPlus, ShieldCheck, Headphones, Search,
-  Loader2, MoreHorizontal, Pencil, PowerOff, Power, Lock, LayoutGrid,
+  Loader2, MoreHorizontal, Pencil, PowerOff, Power, Lock, LayoutGrid, Trash2,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
-import { apiGet, apiPost, apiPut, getBaseUrl } from "@/lib/api";
+import { apiGet, apiPost, apiPut, apiDelete, getBaseUrl } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
 import { Redirect } from "wouter";
@@ -230,6 +230,8 @@ export default function Admin() {
   const [editTarget, setEditTarget] = useState<ApiAgent | null>(null);
   const [editRole, setEditRole] = useState("");
   const [menuTarget, setMenuTarget] = useState<ApiAgent | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ApiAgent | null>(null);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
 
   if (!isAdmin) return <Redirect to="/" />;
 
@@ -265,6 +267,19 @@ export default function Admin() {
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message || "Could not update user.", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiDelete(`/agents/${id}`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["agents"] });
+      setDeleteTarget(null);
+      setDeleteConfirmName("");
+      toast({ title: "User deleted", description: "The account has been permanently removed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message || "Could not delete user.", variant: "destructive" });
     },
   });
 
@@ -539,6 +554,17 @@ export default function Admin() {
                                 ? <><PowerOff className="h-4 w-4" /> Deactivate</>
                                 : <><Power className="h-4 w-4" /> Activate</>}
                             </DropdownMenuItem>
+                            {isSuperAdmin && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  className="gap-2 cursor-pointer text-destructive focus:text-destructive"
+                                  onClick={() => { setDeleteTarget(agent); setDeleteConfirmName(""); }}
+                                  data-testid={`delete-user-${agent.id}`}>
+                                  <Trash2 className="h-4 w-4" /> Delete User
+                                </DropdownMenuItem>
+                              </>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
@@ -599,6 +625,69 @@ export default function Admin() {
           onSave={saveMenus}
         />
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) { setDeleteTarget(null); setDeleteConfirmName(""); } }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" />
+              Delete User Account
+            </DialogTitle>
+            <DialogDescription>
+              This action is <strong>permanent and cannot be undone</strong>. All data associated with this account will be removed.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteTarget && (
+            <div className="py-2 space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-destructive/30 bg-destructive/5">
+                <Avatar className="h-10 w-10 border border-destructive/20">
+                  <AvatarImage src={`https://i.pravatar.cc/150?u=${deleteTarget.email}`} />
+                  <AvatarFallback className="text-sm font-semibold">{deleteTarget.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-semibold text-sm">{deleteTarget.name}</p>
+                  <p className="text-xs text-muted-foreground">{deleteTarget.email}</p>
+                  <Badge variant="secondary" className={`mt-1 text-[10px] border-none ${ROLE_META[deleteTarget.role]?.badge}`}>
+                    {ROLE_META[deleteTarget.role]?.label}
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="delete-confirm">
+                  Type <strong>{deleteTarget.name}</strong> to confirm deletion
+                </Label>
+                <Input
+                  id="delete-confirm"
+                  placeholder={deleteTarget.name}
+                  value={deleteConfirmName}
+                  onChange={(e) => setDeleteConfirmName(e.target.value)}
+                  className="border-destructive/50 focus-visible:ring-destructive"
+                  data-testid="input-delete-confirm"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmName(""); }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteConfirmName !== deleteTarget?.name || deleteMutation.isPending}
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <><Trash2 className="h-4 w-4 mr-1" /> Permanently Delete</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

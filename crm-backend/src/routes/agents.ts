@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { Agent } from "../models/index.js";
-import { requireAuth, requireAdmin, AuthRequest } from "../middlewares/auth.js";
+import { requireAuth, requireAdmin, requireSuperAdmin, AuthRequest } from "../middlewares/auth.js";
 import type { AgentAttributes } from "../models/Agent.js";
 
 const router = Router();
@@ -116,6 +116,28 @@ router.put("/agents/:id/menus", requireAuth, requireAdmin, async (req: AuthReque
 
     await target.update({ allowedMenus: allowedMenus ?? null });
     res.json({ success: true, allowedMenus: target.allowedMenus });
+  } catch {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/agents/:id", requireAuth, requireSuperAdmin, async (req: AuthRequest, res) => {
+  try {
+    const target = await Agent.findByPk(req.params.id);
+    if (!target) { res.status(404).json({ error: "Agent not found" }); return; }
+
+    if (isSuperAdmin(target.role)) {
+      res.status(403).json({ error: "Super admin accounts cannot be deleted" });
+      return;
+    }
+
+    if (req.agent!.id === target.id) {
+      res.status(400).json({ error: "You cannot delete your own account" });
+      return;
+    }
+
+    await target.destroy();
+    res.json({ success: true });
   } catch {
     res.status(500).json({ error: "Internal server error" });
   }
