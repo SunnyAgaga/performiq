@@ -109,6 +109,8 @@ export default function Campaigns() {
   const [memberSearch, setMemberSearch] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<Set<number>>(new Set());
   const [groupSearch, setGroupSearch] = useState("");
+  const [groupChannelFilter, setGroupChannelFilter] = useState<string>("all");
+  const [groupTypeFilter, setGroupTypeFilter] = useState<string>("all");
   const [deleteGroupId, setDeleteGroupId] = useState<number | null>(null);
 
   // ── Queries ──────────────────────────────────────────────────────
@@ -240,7 +242,17 @@ export default function Campaigns() {
   }
 
   const filteredCampaigns = campaigns.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const filteredGroups = groups.filter((g) => !groupSearch || g.name.toLowerCase().includes(groupSearch.toLowerCase()));
+  const filteredGroups = groups.filter((g) => {
+    if (groupSearch && !g.name.toLowerCase().includes(groupSearch.toLowerCase())) return false;
+    if (groupTypeFilter !== "all" && g.type !== groupTypeFilter) return false;
+    if (groupChannelFilter !== "all") {
+      if (g.type === "smart") {
+        const chs = g.filters?.channels ?? [];
+        if (chs.length > 0 && !chs.includes(groupChannelFilter)) return false;
+      }
+    }
+    return true;
+  });
   const sentCampaigns = campaigns.filter((c) => c.status === "sent");
   const avgOpenRate = sentCampaigns.length > 0
     ? (sentCampaigns.reduce((s, c) => s + c.openRate, 0) / sentCampaigns.length).toFixed(1)
@@ -400,12 +412,59 @@ export default function Campaigns() {
         {/* ── GROUPS TAB ──────────────────────────────────────────────── */}
         <TabsContent value="groups" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="relative flex-1 max-w-sm">
+            {/* Search + filters row */}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative w-64">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search groups..." className="pl-9" value={groupSearch} onChange={(e) => setGroupSearch(e.target.value)} />
               </div>
-              <p className="text-sm text-muted-foreground">{groups.length} group{groups.length !== 1 ? "s" : ""}</p>
+
+              {/* Type filter pills */}
+              <div className="flex items-center gap-1.5">
+                {[
+                  { value: "all",    label: "All Types" },
+                  { value: "smart",  label: "⚡ Smart" },
+                  { value: "manual", label: "✓ Manual" },
+                ].map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    onClick={() => setGroupTypeFilter(t.value)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                      groupTypeFilter === t.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Channel filter pills */}
+              <div className="flex items-center gap-1.5">
+                {[
+                  { value: "all",       label: "All Channels" },
+                  { value: "whatsapp",  label: "WhatsApp" },
+                  { value: "facebook",  label: "Facebook" },
+                  { value: "instagram", label: "Instagram" },
+                ].map((ch) => (
+                  <button
+                    key={ch.value}
+                    type="button"
+                    onClick={() => setGroupChannelFilter(ch.value)}
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                      groupChannelFilter === ch.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+                    }`}
+                  >
+                    {ch.label}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-xs text-muted-foreground ml-auto">{filteredGroups.length} of {groups.length} group{groups.length !== 1 ? "s" : ""}</p>
             </div>
 
             {groupsLoading ? (
