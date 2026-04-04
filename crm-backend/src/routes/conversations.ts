@@ -279,7 +279,7 @@ router.get("/conversations/:id/messages", requireAuth, async (req: AuthRequest, 
 
 router.put("/conversations/:id/follow-up", requireAuth, async (req: AuthRequest, res) => {
   try {
-    const { followUpAt, followUpNote } = req.body;
+    const { followUpAt, followUpNote, followUpType } = req.body;
     const conversation = await Conversation.findByPk(req.params.id);
     if (!conversation) {
       res.status(404).json({ error: "Conversation not found" });
@@ -288,9 +288,47 @@ router.put("/conversations/:id/follow-up", requireAuth, async (req: AuthRequest,
     await conversation.update({
       followUpAt: followUpAt ? new Date(followUpAt) : null,
       followUpNote: followUpNote ?? null,
+      followUpType: followUpType ?? null,
     });
-    res.json({ success: true, followUpAt: conversation.followUpAt, followUpNote: conversation.followUpNote });
+    res.json({ success: true, followUpAt: conversation.followUpAt, followUpNote: conversation.followUpNote, followUpType: conversation.followUpType });
   } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/follow-ups", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { customerId, followUpAt, followUpNote, followUpType, channel } = req.body;
+    if (!customerId || !followUpAt) {
+      res.status(400).json({ error: "customerId and followUpAt are required" });
+      return;
+    }
+    const customer = await Customer.findByPk(customerId);
+    if (!customer) {
+      res.status(404).json({ error: "Customer not found" });
+      return;
+    }
+    const convChannel = channel || customer.channel || "whatsapp";
+    let conversation = await Conversation.findOne({
+      where: { customerId, status: { [Op.in]: ["open", "pending"] } },
+      order: [["createdAt", "DESC"]],
+    });
+    if (!conversation) {
+      conversation = await Conversation.create({
+        customerId,
+        channel: convChannel as "whatsapp" | "facebook" | "instagram",
+        status: "open",
+        assignedAgentId: req.agent?.id ?? null,
+      });
+    }
+    await conversation.update({
+      followUpAt: new Date(followUpAt),
+      followUpNote: followUpNote ?? null,
+      followUpType: followUpType ?? null,
+    });
+    res.json({ success: true, conversationId: conversation.id, followUpAt: conversation.followUpAt, followUpType: conversation.followUpType });
+  } catch (err) {
+    console.error("POST /follow-ups error:", err);
     res.status(500).json({ error: "Internal server error" });
   }
 });

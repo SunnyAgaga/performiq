@@ -1,6 +1,8 @@
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../lib/database.js";
 
+export type FollowUpType = "whatsapp" | "sms" | "email" | "facebook" | "instagram" | "phone";
+
 export interface ConversationAttributes {
   id: number;
   customerId: number;
@@ -13,13 +15,14 @@ export interface ConversationAttributes {
   lockedAt: Date | null;
   followUpAt: Date | null;
   followUpNote: string | null;
+  followUpType: FollowUpType | null;
   reopenCount: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
 
 export interface ConversationCreationAttributes
-  extends Optional<ConversationAttributes, "id" | "assignedAgentId" | "unreadCount" | "lastMessageAt" | "lockedByAgentId" | "lockedAt" | "followUpAt" | "followUpNote" | "reopenCount"> {}
+  extends Optional<ConversationAttributes, "id" | "assignedAgentId" | "unreadCount" | "lastMessageAt" | "lockedByAgentId" | "lockedAt" | "followUpAt" | "followUpNote" | "followUpType" | "reopenCount"> {}
 
 export class Conversation extends Model<ConversationAttributes, ConversationCreationAttributes> implements ConversationAttributes {
   declare id: number;
@@ -33,6 +36,7 @@ export class Conversation extends Model<ConversationAttributes, ConversationCrea
   declare lockedAt: Date | null;
   declare followUpAt: Date | null;
   declare followUpNote: string | null;
+  declare followUpType: FollowUpType | null;
   declare reopenCount: number;
   declare readonly createdAt: Date;
   declare readonly updatedAt: Date;
@@ -51,6 +55,7 @@ Conversation.init(
     lockedAt: { type: DataTypes.DATE, allowNull: true, field: "locked_at" },
     followUpAt: { type: DataTypes.DATE, allowNull: true, field: "follow_up_at" },
     followUpNote: { type: DataTypes.TEXT, allowNull: true, field: "follow_up_note" },
+    followUpType: { type: DataTypes.STRING(20), allowNull: true, field: "follow_up_type" },
     reopenCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "reopen_count" },
   },
   {
