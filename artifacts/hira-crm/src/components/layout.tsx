@@ -211,10 +211,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           )}
 
           {visibleAnalyticsGroup.children.length > 0 && (
-            <>
-              <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2 mt-3">Analytics</p>
+            <div className="mt-3">
               <AnalyticsGroupNav />
-            </>
+            </div>
           )}
 
           {adminNav.length > 0 && (
