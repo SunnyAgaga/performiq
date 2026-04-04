@@ -522,7 +522,7 @@ export default function Channels() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6 flex-wrap h-auto gap-1">
           {(Object.keys(CHANNEL_META) as ChannelType[]).map((type) => (
-            <TabsTrigger key={type} value={type} className="gap-1.5">
+            <TabsTrigger key={type} value={type} className="gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
               {type === "twitter" ? <Twitter className="h-3.5 w-3.5" /> : type === "widget" ? <Globe className="h-3.5 w-3.5" /> : <span className="text-sm">{CHANNEL_META[type].icon}</span>}
               {CHANNEL_META[type].label}
               {channelsByType(type)?.isConnected && (
@@ -530,7 +530,7 @@ export default function Channels() {
               )}
             </TabsTrigger>
           ))}
-          <TabsTrigger value="email" className="gap-1.5">
+          <TabsTrigger value="email" className="gap-1.5 data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm">
             <Mail className="h-3.5 w-3.5 text-indigo-500" /> Email
             {emailSaved && <span className="ml-0.5 h-2 w-2 rounded-full bg-green-500 inline-block" />}
           </TabsTrigger>

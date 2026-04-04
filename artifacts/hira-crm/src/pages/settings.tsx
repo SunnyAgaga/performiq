@@ -391,17 +391,17 @@ export default function Settings() {
                 className={cn(
                   "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors group",
                   isActive
-                    ? "bg-primary text-primary-foreground"
+                    ? "bg-blue-600 text-white"
                     : "hover:bg-muted text-muted-foreground hover:text-foreground"
                 )}
                 data-testid={`settings-nav-${item.id}`}
               >
-                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground")} />
+                <Icon className={cn("h-4 w-4 shrink-0", isActive ? "text-white" : "text-muted-foreground group-hover:text-foreground")} />
                 <div className="flex-1 min-w-0">
-                  <p className={cn("text-sm font-medium leading-tight", isActive ? "text-primary-foreground" : "")}>{item.label}</p>
-                  <p className={cn("text-[11px] truncate mt-0.5 leading-tight", isActive ? "text-primary-foreground/70" : "text-muted-foreground")}>{item.description}</p>
+                  <p className={cn("text-sm font-medium leading-tight", isActive ? "text-white" : "")}>{item.label}</p>
+                  <p className={cn("text-[11px] truncate mt-0.5 leading-tight", isActive ? "text-white/70" : "text-muted-foreground")}>{item.description}</p>
                 </div>
-                {isActive && <ChevronRight className="h-3.5 w-3.5 text-primary-foreground/70 shrink-0" />}
+                {isActive && <ChevronRight className="h-3.5 w-3.5 text-white/70 shrink-0" />}
               </button>
             );
           })}
