@@ -183,6 +183,70 @@ router.get("/customers/analytics/summary", requireAuth, async (req: AuthRequest,
   }
 });
 
+// POST /api/customers/bulk — import multiple customers at once
+router.post("/customers/bulk", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { customers: rows } = req.body as { customers: Array<{ name: string; email?: string; phone?: string; channel?: string; tags?: string[]; notes?: string }> };
+    if (!Array.isArray(rows) || rows.length === 0) {
+      res.status(400).json({ error: "No customer records provided" });
+      return;
+    }
+    if (rows.length > 1000) {
+      res.status(400).json({ error: "Maximum 1000 customers per import" });
+      return;
+    }
+
+    const validChannels = ["whatsapp", "facebook", "instagram"];
+    const created: unknown[] = [];
+    const errors: Array<{ row: number; error: string }> = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r.name?.trim()) {
+        errors.push({ row: i + 1, error: "Name is required" });
+        continue;
+      }
+      const channel = validChannels.includes(r.channel ?? "") ? r.channel : "whatsapp";
+      try {
+        const c = await Customer.create({
+          name: r.name.trim(),
+          email: r.email?.trim() || null,
+          phone: r.phone?.trim() || null,
+          channel: channel as "whatsapp" | "facebook" | "instagram",
+          tags: Array.isArray(r.tags) ? r.tags : (r.tags ? String(r.tags).split(",").map((t: string) => t.trim()).filter(Boolean) : []),
+          notes: r.notes?.trim() || null,
+        });
+        created.push(c.toJSON());
+      } catch (e) {
+        errors.push({ row: i + 1, error: "Failed to create" });
+      }
+    }
+
+    res.status(201).json({ created: created.length, errors, total: rows.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/customers/export — fetch all customers for export (up to 5000)
+router.get("/customers/export", requireAuth, async (req: AuthRequest, res) => {
+  try {
+    const { ids, channel } = req.query as Record<string, string>;
+    const where: Record<string, unknown> = {};
+    if (channel && channel !== "all") where.channel = channel;
+    if (ids) {
+      const idArr = ids.split(",").map((id) => parseInt(id)).filter(Boolean);
+      where.id = { [Op.in]: idArr };
+    }
+    const rows = await Customer.findAll({ where, order: [["createdAt", "DESC"]], limit: 5000 });
+    res.json({ customers: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.put("/customers/:id", requireAuth, async (req: AuthRequest, res) => {
   try {
     const customer = await Customer.findByPk(req.params.id);
