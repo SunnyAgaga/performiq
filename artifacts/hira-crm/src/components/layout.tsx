@@ -262,16 +262,22 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     window.location.reload();
   };
 
-  function FlatNavItem({ item }: { item: NavItem }) {
+  function FlatNavItem({ item, variant = "default" }: { item: NavItem; variant?: "default" | "blue" }) {
     const isActive = location === item.href;
     const isDueFollowUp = item.href === "/follow-ups" && totalDue > 0;
+
+    const activeClass = variant === "blue"
+      ? "bg-blue-500/20 text-blue-300 font-medium"
+      : "bg-sidebar-accent text-sidebar-accent-foreground font-medium";
+    const inactiveClass = variant === "blue"
+      ? "text-blue-400/80 hover:bg-blue-500/10 hover:text-blue-300"
+      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground";
+
     return (
       <Link href={item.href}>
         <div
           className={`flex items-center gap-3 px-3 py-2.5 rounded-md cursor-pointer transition-colors ${
-            isActive
-              ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-              : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            isActive ? activeClass : inactiveClass
           }`}
           data-testid={`nav-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
         >
@@ -382,8 +388,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           {visibleTools.length > 0 && (
             <>
-              <p className="text-[10px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 py-2 mt-3">Tools</p>
-              {visibleTools.map((item) => <FlatNavItem key={item.name} item={item} />)}
+              <p className="text-[10px] font-semibold text-blue-400/60 uppercase tracking-wider px-3 py-2 mt-3">Tools</p>
+              {visibleTools.map((item) => <FlatNavItem key={item.name} item={item} variant="blue" />)}
             </>
           )}
         </nav>
