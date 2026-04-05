@@ -7,7 +7,7 @@ export interface ConversationAttributes {
   id: number;
   customerId: number;
   assignedAgentId: number | null;
-  channel: "whatsapp" | "facebook" | "instagram";
+  channel: "whatsapp" | "facebook" | "instagram" | "widget";
   status: "open" | "ongoing" | "pending" | "resolved";
   unreadCount: number;
   lastMessageAt: Date | null;
@@ -28,7 +28,7 @@ export class Conversation extends Model<ConversationAttributes, ConversationCrea
   declare id: number;
   declare customerId: number;
   declare assignedAgentId: number | null;
-  declare channel: "whatsapp" | "facebook" | "instagram";
+  declare channel: "whatsapp" | "facebook" | "instagram" | "widget";
   declare status: "open" | "ongoing" | "pending" | "resolved";
   declare unreadCount: number;
   declare lastMessageAt: Date | null;
@@ -47,7 +47,7 @@ Conversation.init(
     id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
     customerId: { type: DataTypes.INTEGER, allowNull: false, field: "customer_id", references: { model: "crm_customers", key: "id" } },
     assignedAgentId: { type: DataTypes.INTEGER, allowNull: true, field: "assigned_agent_id", references: { model: "crm_agents", key: "id" } },
-    channel: { type: DataTypes.ENUM("whatsapp", "facebook", "instagram"), allowNull: false },
+    channel: { type: DataTypes.ENUM("whatsapp", "facebook", "instagram", "widget"), allowNull: false },
     status: { type: DataTypes.ENUM("open", "ongoing", "pending", "resolved"), allowNull: false, defaultValue: "open" },
     unreadCount: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "unread_count" },
     lastMessageAt: { type: DataTypes.DATE, allowNull: true, field: "last_message_at" },

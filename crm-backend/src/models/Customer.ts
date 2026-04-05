@@ -6,7 +6,7 @@ export interface CustomerAttributes {
   name: string;
   email: string | null;
   phone: string | null;
-  channel: "whatsapp" | "facebook" | "instagram";
+  channel: "whatsapp" | "facebook" | "instagram" | "widget";
   tags: string[];
   notes: string | null;
   totalConversations: number;
@@ -23,7 +23,7 @@ export class Customer extends Model<CustomerAttributes, CustomerCreationAttribut
   declare name: string;
   declare email: string | null;
   declare phone: string | null;
-  declare channel: "whatsapp" | "facebook" | "instagram";
+  declare channel: "whatsapp" | "facebook" | "instagram" | "widget";
   declare tags: string[];
   declare notes: string | null;
   declare totalConversations: number;
@@ -38,7 +38,7 @@ Customer.init(
     name: { type: DataTypes.STRING(100), allowNull: false },
     email: { type: DataTypes.STRING(255), allowNull: true },
     phone: { type: DataTypes.STRING(50), allowNull: true },
-    channel: { type: DataTypes.ENUM("whatsapp", "facebook", "instagram"), allowNull: false },
+    channel: { type: DataTypes.ENUM("whatsapp", "facebook", "instagram", "widget"), allowNull: false },
     tags: { type: DataTypes.ARRAY(DataTypes.STRING), allowNull: false, defaultValue: [] },
     notes: { type: DataTypes.TEXT, allowNull: true },
     totalConversations: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0, field: "total_conversations" },
