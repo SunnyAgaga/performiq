@@ -6,6 +6,7 @@ import {
   Users, Search, ChevronRight, X, User, Briefcase, Heart,
   CreditCard, FileText, Edit2, Check, Phone, Mail, MapPin,
   Building2, Hash, Plus, RefreshCw, Trash2, FolderOpen, AlertCircle,
+  GraduationCap, ClipboardList, Star, UserCheck,
 } from "lucide-react";
 import { apiFetch } from "@/lib/utils";
 
@@ -33,15 +34,19 @@ function Avatar({ name, photo, size = 40 }: { name: string; photo?: string | nul
   );
 }
 
-type Tab = "personal" | "employment" | "financial" | "emergency" | "notes" | "documents";
+type Tab = "personal" | "employment" | "financial" | "emergency" | "beneficiaries" | "experience" | "education" | "references" | "notes" | "documents";
 
 const TABS: { id: Tab; label: string; icon: any }[] = [
-  { id: "personal",   label: "Personal",   icon: User },
-  { id: "employment", label: "Employment", icon: Briefcase },
-  { id: "financial",  label: "Financial",  icon: CreditCard },
-  { id: "emergency",  label: "Emergency",  icon: Heart },
-  { id: "documents",  label: "Documents",  icon: FolderOpen },
-  { id: "notes",      label: "Notes",      icon: FileText },
+  { id: "personal",      label: "Personal",      icon: User },
+  { id: "employment",    label: "Employment",    icon: Briefcase },
+  { id: "financial",     label: "Financial",     icon: CreditCard },
+  { id: "emergency",     label: "Next of Kin",   icon: Heart },
+  { id: "beneficiaries", label: "Beneficiaries", icon: Star },
+  { id: "experience",    label: "Experience",    icon: ClipboardList },
+  { id: "education",     label: "Education",     icon: GraduationCap },
+  { id: "references",    label: "References",    icon: UserCheck },
+  { id: "documents",     label: "Documents",     icon: FolderOpen },
+  { id: "notes",         label: "Notes",         icon: FileText },
 ];
 
 const DOC_TYPES: { value: string; label: string; color: string }[] = [
@@ -62,7 +67,7 @@ function docTypeInfo(type: string) {
 }
 
 function Field({ label, value, editing, type = "text", placeholder, onChange }: {
-  label: string; value?: string | null; editing: boolean;
+  label: string; value?: string | number | null; editing: boolean;
   type?: string; placeholder?: string; onChange: (v: string) => void;
 }) {
   return (
@@ -77,8 +82,8 @@ function Field({ label, value, editing, type = "text", placeholder, onChange }: 
           className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
         />
       ) : (
-        <p className={`text-sm py-1.5 ${value ? "text-foreground" : "text-muted-foreground/60 italic"}`}>
-          {value || "Not set"}
+        <p className={`text-sm py-1.5 ${value != null && value !== "" ? "text-foreground" : "text-muted-foreground/60 italic"}`}>
+          {value != null && value !== "" ? String(value) : "Not set"}
         </p>
       )}
     </div>
@@ -129,6 +134,479 @@ function TextareaField({ label, value, editing, placeholder, onChange }: {
           {value || "Not set"}
         </p>
       )}
+    </div>
+  );
+}
+
+const MARITAL_STATUS_OPTIONS = [
+  { value: "single", label: "Single" },
+  { value: "single_parent", label: "Single Parent" },
+  { value: "married", label: "Married" },
+  { value: "separated", label: "Separated" },
+  { value: "divorced", label: "Divorced" },
+  { value: "widowed", label: "Widowed" },
+];
+
+// ── Tabular Section Components ─────────────────────────────────────────────────
+
+function BeneficiariesTab({ staffId, canEdit }: { staffId: number; canEdit: boolean }) {
+  const { toast } = useToast();
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState({ name: "", address: "", phoneNumber: "" });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<any>({});
+
+  const { data: rows = [], refetch } = useQuery<any[]>({
+    queryKey: ["staff-beneficiaries", staffId],
+    queryFn: () => apiFetchJson(`/api/users/${staffId}/beneficiaries`),
+  });
+
+  const add = async () => {
+    if (!draft.name.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
+    try {
+      await apiFetchJson(`/api/users/${staffId}/beneficiaries`, {
+        method: "POST", body: JSON.stringify({ ...draft, orderIndex: rows.length }),
+      });
+      setDraft({ name: "", address: "", phoneNumber: "" }); setAdding(false); refetch();
+      toast({ title: "Beneficiary added" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const save = async (id: number) => {
+    try {
+      await apiFetchJson(`/api/users/${staffId}/beneficiaries/${id}`, {
+        method: "PUT", body: JSON.stringify(editDraft),
+      });
+      setEditId(null); refetch(); toast({ title: "Updated" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const remove = async (id: number) => {
+    if (!confirm("Remove this beneficiary?")) return;
+    try {
+      await apiFetchJson(`/api/users/${staffId}/beneficiaries/${id}`, { method: "DELETE" });
+      refetch(); toast({ title: "Removed" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+          <Star className="w-3.5 h-3.5" /> Beneficiaries
+        </h3>
+        {canEdit && !adding && (
+          <button onClick={() => setAdding(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div className="border border-primary/30 bg-primary/5 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-primary">New Beneficiary</p>
+          <Field label="Name *" value={draft.name} editing placeholder="Full name" onChange={v => setDraft(p => ({ ...p, name: v }))} />
+          <Field label="Address" value={draft.address} editing onChange={v => setDraft(p => ({ ...p, address: v }))} />
+          <Field label="Phone Number" value={draft.phoneNumber} editing type="tel" onChange={v => setDraft(p => ({ ...p, phoneNumber: v }))} />
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setAdding(false); setDraft({ name: "", address: "", phoneNumber: "" }); }}
+              className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted">Cancel</button>
+            <button onClick={add}
+              className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(rows as any[]).length === 0 && !adding ? (
+        <div className="text-center py-10 text-muted-foreground">
+          <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No beneficiaries recorded</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {(rows as any[]).map((row: any) => (
+            <div key={row.id} className="border border-border rounded-xl p-4">
+              {editId === row.id ? (
+                <div className="space-y-3">
+                  <Field label="Name *" value={editDraft.name} editing onChange={v => setEditDraft((p: any) => ({ ...p, name: v }))} />
+                  <Field label="Address" value={editDraft.address} editing onChange={v => setEditDraft((p: any) => ({ ...p, address: v }))} />
+                  <Field label="Phone Number" value={editDraft.phoneNumber} editing type="tel" onChange={v => setEditDraft((p: any) => ({ ...p, phoneNumber: v }))} />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditId(null)} className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted">Cancel</button>
+                    <button onClick={() => save(row.id)} className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-sm">{row.name}</p>
+                    {row.address && <p className="text-xs text-muted-foreground mt-0.5">{row.address}</p>}
+                    {row.phoneNumber && <p className="text-xs text-muted-foreground">{row.phoneNumber}</p>}
+                  </div>
+                  {canEdit && (
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => { setEditId(row.id); setEditDraft({ name: row.name, address: row.address ?? "", phoneNumber: row.phoneNumber ?? "" }); }}
+                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => remove(row.id)} className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 text-muted-foreground"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkExperienceTab({ staffId, canEdit }: { staffId: number; canEdit: boolean }) {
+  const { toast } = useToast();
+  const [adding, setAdding] = useState(false);
+  const emptyRow = { companyName: "", companyAddress: "", positionHeld: "", fromDate: "", toDate: "", reasonForLeaving: "" };
+  const [draft, setDraft] = useState({ ...emptyRow });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<any>({});
+
+  const { data: rows = [], refetch } = useQuery<any[]>({
+    queryKey: ["staff-experience", staffId],
+    queryFn: () => apiFetchJson(`/api/users/${staffId}/work-experience`),
+  });
+
+  const add = async () => {
+    if (!draft.companyName.trim()) { toast({ title: "Company name is required", variant: "destructive" }); return; }
+    try {
+      await apiFetchJson(`/api/users/${staffId}/work-experience`, {
+        method: "POST", body: JSON.stringify({ ...draft, orderIndex: rows.length }),
+      });
+      setDraft({ ...emptyRow }); setAdding(false); refetch();
+      toast({ title: "Experience entry added" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const save = async (id: number) => {
+    try {
+      await apiFetchJson(`/api/users/${staffId}/work-experience/${id}`, {
+        method: "PUT", body: JSON.stringify(editDraft),
+      });
+      setEditId(null); refetch(); toast({ title: "Updated" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const remove = async (id: number) => {
+    if (!confirm("Remove this entry?")) return;
+    try {
+      await apiFetchJson(`/api/users/${staffId}/work-experience/${id}`, { method: "DELETE" });
+      refetch(); toast({ title: "Removed" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const ExperienceForm = ({ data, onChange }: { data: any; onChange: (f: string, v: string) => void }) => (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-3">
+        <Field label="Company Name *" value={data.companyName} editing placeholder="e.g. Acme Ltd" onChange={v => onChange("companyName", v)} />
+        <Field label="Company Address" value={data.companyAddress} editing onChange={v => onChange("companyAddress", v)} />
+        <Field label="Position Held" value={data.positionHeld} editing onChange={v => onChange("positionHeld", v)} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="From" value={data.fromDate} editing placeholder="e.g. Jan 2020" onChange={v => onChange("fromDate", v)} />
+        <Field label="To" value={data.toDate} editing placeholder="e.g. Dec 2022" onChange={v => onChange("toDate", v)} />
+      </div>
+      <Field label="Reason for Leaving" value={data.reasonForLeaving} editing onChange={v => onChange("reasonForLeaving", v)} />
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+          <ClipboardList className="w-3.5 h-3.5" /> Work Experience (Start with recent employer)
+        </h3>
+        {canEdit && !adding && (
+          <button onClick={() => setAdding(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div className="border border-primary/30 bg-primary/5 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-primary">New Entry</p>
+          <ExperienceForm data={draft} onChange={(f, v) => setDraft(p => ({ ...p, [f]: v }))} />
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setAdding(false); setDraft({ ...emptyRow }); }}
+              className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted">Cancel</button>
+            <button onClick={add}
+              className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(rows as any[]).length === 0 && !adding ? (
+        <div className="text-center py-10 text-muted-foreground">
+          <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No work experience recorded</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {(rows as any[]).map((row: any, idx: number) => (
+            <div key={row.id} className="border border-border rounded-xl p-4">
+              {editId === row.id ? (
+                <div className="space-y-3">
+                  <ExperienceForm data={editDraft} onChange={(f, v) => setEditDraft((p: any) => ({ ...p, [f]: v }))} />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditId(null)} className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted">Cancel</button>
+                    <button onClick={() => save(row.id)} className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted-foreground bg-muted rounded-full w-5 h-5 flex items-center justify-center shrink-0">{idx + 1}</span>
+                      <p className="font-semibold text-sm">{row.companyName}</p>
+                    </div>
+                    {row.positionHeld && <p className="text-xs text-primary font-medium mt-1 ml-7">{row.positionHeld}</p>}
+                    {row.companyAddress && <p className="text-xs text-muted-foreground mt-0.5 ml-7">{row.companyAddress}</p>}
+                    {(row.fromDate || row.toDate) && (
+                      <p className="text-xs text-muted-foreground mt-0.5 ml-7">{row.fromDate} — {row.toDate || "Present"}</p>
+                    )}
+                    {row.reasonForLeaving && (
+                      <p className="text-xs text-muted-foreground mt-0.5 ml-7">Left: {row.reasonForLeaving}</p>
+                    )}
+                  </div>
+                  {canEdit && (
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => { setEditId(row.id); setEditDraft({ companyName: row.companyName, companyAddress: row.companyAddress ?? "", positionHeld: row.positionHeld ?? "", fromDate: row.fromDate ?? "", toDate: row.toDate ?? "", reasonForLeaving: row.reasonForLeaving ?? "" }); }}
+                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => remove(row.id)} className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 text-muted-foreground"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EducationTab({ staffId, canEdit }: { staffId: number; canEdit: boolean }) {
+  const { toast } = useToast();
+  const [adding, setAdding] = useState(false);
+  const emptyRow = { schoolAttended: "", certificateObtained: "", fromDate: "", toDate: "" };
+  const [draft, setDraft] = useState({ ...emptyRow });
+  const [editId, setEditId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<any>({});
+
+  const { data: rows = [], refetch } = useQuery<any[]>({
+    queryKey: ["staff-education", staffId],
+    queryFn: () => apiFetchJson(`/api/users/${staffId}/education`),
+  });
+
+  const add = async () => {
+    if (!draft.schoolAttended.trim()) { toast({ title: "School name is required", variant: "destructive" }); return; }
+    try {
+      await apiFetchJson(`/api/users/${staffId}/education`, {
+        method: "POST", body: JSON.stringify({ ...draft, orderIndex: rows.length }),
+      });
+      setDraft({ ...emptyRow }); setAdding(false); refetch();
+      toast({ title: "Education entry added" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const save = async (id: number) => {
+    try {
+      await apiFetchJson(`/api/users/${staffId}/education/${id}`, {
+        method: "PUT", body: JSON.stringify(editDraft),
+      });
+      setEditId(null); refetch(); toast({ title: "Updated" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const remove = async (id: number) => {
+    if (!confirm("Remove this entry?")) return;
+    try {
+      await apiFetchJson(`/api/users/${staffId}/education/${id}`, { method: "DELETE" });
+      refetch(); toast({ title: "Removed" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const EduForm = ({ data, onChange }: { data: any; onChange: (f: string, v: string) => void }) => (
+    <div className="space-y-3">
+      <Field label="School / Institution *" value={data.schoolAttended} editing onChange={v => onChange("schoolAttended", v)} />
+      <Field label="Certificate / Qualification Obtained" value={data.certificateObtained} editing onChange={v => onChange("certificateObtained", v)} />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="From" value={data.fromDate} editing placeholder="e.g. 2015" onChange={v => onChange("fromDate", v)} />
+        <Field label="To" value={data.toDate} editing placeholder="e.g. 2019" onChange={v => onChange("toDate", v)} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+          <GraduationCap className="w-3.5 h-3.5" /> Educational Qualification
+        </h3>
+        {canEdit && !adding && (
+          <button onClick={() => setAdding(true)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors">
+            <Plus className="w-3.5 h-3.5" /> Add
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div className="border border-primary/30 bg-primary/5 rounded-xl p-4 space-y-3">
+          <p className="text-xs font-semibold text-primary">New Entry</p>
+          <EduForm data={draft} onChange={(f, v) => setDraft(p => ({ ...p, [f]: v }))} />
+          <div className="flex gap-2 justify-end">
+            <button onClick={() => { setAdding(false); setDraft({ ...emptyRow }); }}
+              className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted">Cancel</button>
+            <button onClick={add}
+              className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(rows as any[]).length === 0 && !adding ? (
+        <div className="text-center py-10 text-muted-foreground">
+          <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No education records</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {(rows as any[]).map((row: any, idx: number) => (
+            <div key={row.id} className="border border-border rounded-xl p-4">
+              {editId === row.id ? (
+                <div className="space-y-3">
+                  <EduForm data={editDraft} onChange={(f, v) => setEditDraft((p: any) => ({ ...p, [f]: v }))} />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditId(null)} className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted">Cancel</button>
+                    <button onClick={() => save(row.id)} className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-muted-foreground bg-muted rounded-full w-5 h-5 flex items-center justify-center shrink-0">{idx + 1}</span>
+                      <p className="font-semibold text-sm">{row.schoolAttended}</p>
+                    </div>
+                    {row.certificateObtained && <p className="text-xs text-primary font-medium mt-1 ml-7">{row.certificateObtained}</p>}
+                    {(row.fromDate || row.toDate) && (
+                      <p className="text-xs text-muted-foreground mt-0.5 ml-7">{row.fromDate} — {row.toDate}</p>
+                    )}
+                  </div>
+                  {canEdit && (
+                    <div className="flex gap-1 shrink-0">
+                      <button onClick={() => { setEditId(row.id); setEditDraft({ schoolAttended: row.schoolAttended, certificateObtained: row.certificateObtained ?? "", fromDate: row.fromDate ?? "", toDate: row.toDate ?? "" }); }}
+                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><Edit2 className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => remove(row.id)} className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 text-muted-foreground"><Trash2 className="w-3.5 h-3.5" /></button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const EMPTY_REF = { name: "", address: "", occupation: "", age: "", telephone: "", email: "" };
+
+function ReferencesTab({ staffId, canEdit }: { staffId: number; canEdit: boolean }) {
+  const { toast } = useToast();
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<any[]>([{ ...EMPTY_REF }, { ...EMPTY_REF }]);
+
+  const { data: rows = [], refetch } = useQuery<any[]>({
+    queryKey: ["staff-references", staffId],
+    queryFn: () => apiFetchJson(`/api/users/${staffId}/references`),
+  });
+
+  const startEdit = () => {
+    const d = [0, 1].map(i => {
+      const r = (rows as any[])[i];
+      return r ? { name: r.name ?? "", address: r.address ?? "", occupation: r.occupation ?? "", age: r.age ?? "", telephone: r.telephone ?? "", email: r.email ?? "" } : { ...EMPTY_REF };
+    });
+    setDraft(d);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    try {
+      await apiFetchJson(`/api/users/${staffId}/references`, {
+        method: "PUT", body: JSON.stringify(draft),
+      });
+      refetch(); setEditing(false);
+      toast({ title: "References saved" });
+    } catch (e: any) { toast({ title: e.message, variant: "destructive" }); }
+  };
+
+  const setRef = (i: number, field: string, val: string) =>
+    setDraft(prev => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r));
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
+          <UserCheck className="w-3.5 h-3.5" /> References
+        </h3>
+        {canEdit && !editing && (
+          <button onClick={startEdit}
+            className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted transition-colors flex items-center gap-1">
+            <Edit2 className="w-3.5 h-3.5" /> Edit
+          </button>
+        )}
+        {canEdit && editing && (
+          <div className="flex gap-2">
+            <button onClick={() => setEditing(false)} className="px-3 py-1.5 rounded-xl border border-border text-xs font-medium hover:bg-muted">Cancel</button>
+            <button onClick={save} className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 flex items-center gap-1">
+              <Check className="w-3.5 h-3.5" /> Save
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {[0, 1].map(i => {
+          const r = editing ? draft[i] : (rows as any[])[i];
+          return (
+            <div key={i} className="border border-border rounded-xl p-4 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Reference {i + 1}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Name" value={r?.name} editing={editing} onChange={v => setRef(i, "name", v)} />
+                <Field label="Occupation" value={r?.occupation} editing={editing} onChange={v => setRef(i, "occupation", v)} />
+              </div>
+              <Field label="Address" value={r?.address} editing={editing} onChange={v => setRef(i, "address", v)} />
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Age" value={r?.age} editing={editing} onChange={v => setRef(i, "age", v)} />
+                <Field label="Tel" value={r?.telephone} editing={editing} type="tel" onChange={v => setRef(i, "telephone", v)} />
+                <Field label="Email" value={r?.email} editing={editing} type="email" onChange={v => setRef(i, "email", v)} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -193,24 +671,48 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
   const startEdit = () => {
     if (!staff) return;
     setDraft({
+      // Name
+      surname: staff.surname ?? "",
+      firstName: staff.firstName ?? "",
+      middleName: staff.middleName ?? "",
+      // Personal
+      dateOfBirth: staff.dateOfBirth ?? "",
+      gender: staff.gender ?? "",
+      maritalStatus: staff.maritalStatus ?? "",
+      maidenName: staff.maidenName ?? "",
+      religion: staff.religion ?? "",
+      stateOfOrigin: staff.stateOfOrigin ?? "",
+      nationality: staff.nationality ?? "",
+      nationalId: staff.nationalId ?? "",
+      hobbies: staff.hobbies ?? "",
+      // Addresses
+      permanentAddress: staff.permanentAddress ?? "",
+      temporaryAddress: staff.temporaryAddress ?? "",
       address: staff.address ?? "",
       city: staff.city ?? "",
       stateProvince: staff.stateProvince ?? "",
       country: staff.country ?? "",
       postalCode: staff.postalCode ?? "",
-      dateOfBirth: staff.dateOfBirth ?? "",
-      gender: staff.gender ?? "",
-      nationalId: staff.nationalId ?? "",
+      // Spouse & family
+      spouseName: staff.spouseName ?? "",
+      spouseOccupation: staff.spouseOccupation ?? "",
+      numberOfChildren: staff.numberOfChildren ?? "",
+      // Employment
       startDate: staff.startDate ?? "",
+      // Next of kin
       emergencyContactName: staff.emergencyContactName ?? "",
       emergencyContactPhone: staff.emergencyContactPhone ?? "",
       emergencyContactRelation: staff.emergencyContactRelation ?? "",
+      emergencyContactAddress: staff.emergencyContactAddress ?? "",
+      // Financial
       bankName: staff.bankName ?? "",
       bankBranch: staff.bankBranch ?? "",
       bankAccountNumber: staff.bankAccountNumber ?? "",
       bankAccountName: staff.bankAccountName ?? "",
       taxId: staff.taxId ?? "",
       pensionId: staff.pensionId ?? "",
+      pfaName: staff.pfaName ?? "",
+      rsaPin: staff.rsaPin ?? "",
       hmo: staff.hmo ?? "",
       notes: staff.notes ?? "",
     });
@@ -218,10 +720,11 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
   };
 
   const cancelEdit = () => { setDraft({}); setEditing(false); };
-
   const set = (field: string) => (v: string) => setDraft((p: any) => ({ ...p, [field]: v }));
-
   const d = editing ? draft : (staff ?? {});
+
+  // Tabs that use their own CRUD sub-components (no global edit)
+  const isSubTab = ["beneficiaries", "experience", "education", "references", "documents"].includes(tab);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-end bg-black/30 backdrop-blur-sm">
@@ -271,8 +774,8 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
           {TABS.map(t => {
             const Icon = t.icon;
             return (
-              <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-4 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors
+              <button key={t.id} onClick={() => { setTab(t.id); if (editing && !isSubTab) { /* keep editing */ } }}
+                className={`flex items-center gap-1.5 px-3 py-3 text-xs font-semibold whitespace-nowrap border-b-2 transition-colors
                   ${tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
                 <Icon className="w-3.5 h-3.5" /> {t.label}
               </button>
@@ -286,8 +789,8 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
             <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">Loading…</div>
           ) : (
             <>
-              {/* Edit / Save controls */}
-              {canEdit && (
+              {/* Edit / Save controls — only for tabs that use global editing */}
+              {canEdit && !isSubTab && (
                 <div className="flex items-center justify-between mb-5">
                   <p className="text-xs text-muted-foreground">
                     {editing ? "Editing — make changes and save" : "Click Edit to update this section"}
@@ -315,26 +818,45 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
                 </div>
               )}
 
-              {/* Personal Tab */}
+              {/* ── Personal Tab ─────────────────────────────────────── */}
               {tab === "personal" && (
                 <div className="space-y-5">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                    <User className="w-3.5 h-3.5" /> Personal Information
-                  </h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <Field label="Date of Birth" value={d.dateOfBirth} editing={editing} type="date" onChange={set("dateOfBirth")} />
-                    <SelectField label="Gender" value={d.gender} editing={editing}
-                      options={[{ value: "male", label: "Male" }, { value: "female", label: "Female" }, { value: "other", label: "Other" }, { value: "prefer_not_to_say", label: "Prefer not to say" }]}
-                      onChange={set("gender")} />
-                    <Field label="National ID / Passport" value={d.nationalId} editing={editing} placeholder="e.g. A1234567" onChange={set("nationalId")} />
-                    <Field label="Start Date" value={d.startDate} editing={editing} type="date" onChange={set("startDate")} />
+                  {/* Name breakdown */}
+                  <div>
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5" /> Full Name
+                    </h4>
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field label="Surname" value={d.surname} editing={editing} onChange={set("surname")} />
+                      <Field label="First Name" value={d.firstName} editing={editing} onChange={set("firstName")} />
+                      <Field label="Middle Name" value={d.middleName} editing={editing} onChange={set("middleName")} />
+                    </div>
                   </div>
+
+                  <div className="border-t border-border/50 pt-4">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Identity</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <Field label="Date of Birth" value={d.dateOfBirth} editing={editing} type="date" onChange={set("dateOfBirth")} />
+                      <SelectField label="Sex" value={d.gender} editing={editing}
+                        options={[{ value: "male", label: "Male" }, { value: "female", label: "Female" }, { value: "other", label: "Other" }]}
+                        onChange={set("gender")} />
+                      <SelectField label="Marital Status" value={d.maritalStatus} editing={editing}
+                        options={MARITAL_STATUS_OPTIONS} onChange={set("maritalStatus")} />
+                      <Field label="Maiden Name (if married)" value={d.maidenName} editing={editing} onChange={set("maidenName")} />
+                      <Field label="Religion" value={d.religion} editing={editing} onChange={set("religion")} />
+                      <Field label="State of Origin" value={d.stateOfOrigin} editing={editing} onChange={set("stateOfOrigin")} />
+                      <Field label="Nationality" value={d.nationality} editing={editing} onChange={set("nationality")} />
+                      <Field label="National ID / Passport" value={d.nationalId} editing={editing} placeholder="e.g. A1234567" onChange={set("nationalId")} />
+                    </div>
+                  </div>
+
                   <div className="border-t border-border/50 pt-4">
                     <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5" /> Address
+                      <MapPin className="w-3.5 h-3.5" /> Addresses
                     </h4>
                     <div className="space-y-3">
-                      <Field label="Street Address" value={d.address} editing={editing} placeholder="123 Main Street" onChange={set("address")} />
+                      <TextareaField label="Permanent Home Address" value={d.permanentAddress} editing={editing} onChange={set("permanentAddress")} />
+                      <TextareaField label="Temporary Home Address" value={d.temporaryAddress} editing={editing} onChange={set("temporaryAddress")} />
                       <div className="grid grid-cols-2 gap-3">
                         <Field label="City" value={d.city} editing={editing} onChange={set("city")} />
                         <Field label="State / Province" value={d.stateProvince} editing={editing} onChange={set("stateProvince")} />
@@ -343,10 +865,23 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
                       </div>
                     </div>
                   </div>
+
+                  <div className="border-t border-border/50 pt-4">
+                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Family</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Spouse Name" value={d.spouseName} editing={editing} onChange={set("spouseName")} />
+                      <Field label="Spouse Occupation" value={d.spouseOccupation} editing={editing} onChange={set("spouseOccupation")} />
+                      <Field label="Number of Children" value={d.numberOfChildren} editing={editing} type="number" onChange={set("numberOfChildren")} />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/50 pt-4">
+                    <Field label="Hobbies" value={d.hobbies} editing={editing} placeholder="e.g. Reading, Football, Cooking" onChange={set("hobbies")} />
+                  </div>
                 </div>
               )}
 
-              {/* Employment Tab */}
+              {/* ── Employment Tab ────────────────────────────────────── */}
               {tab === "employment" && (
                 <div className="space-y-5">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
@@ -384,13 +919,16 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
                       )}
                     </div>
                   </div>
+                  <div>
+                    <Field label="Start Date" value={d.startDate} editing={editing} type="date" onChange={set("startDate")} />
+                  </div>
                   <p className="text-xs text-muted-foreground italic">
                     To update name, email, department, job title or access level — use the User Management page.
                   </p>
                 </div>
               )}
 
-              {/* Financial Tab */}
+              {/* ── Financial Tab ─────────────────────────────────────── */}
               {tab === "financial" && (
                 <div className="space-y-5">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
@@ -405,39 +943,56 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
                     <div className="border border-border rounded-xl p-4 space-y-3">
                       <h4 className="text-sm font-semibold flex items-center gap-1.5"><Building2 className="w-4 h-4" /> Bank Details</h4>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="Bank Name" value={d.bankName} editing={editing} placeholder="e.g. Barclays" onChange={set("bankName")} />
-                        <Field label="Branch" value={d.bankBranch} editing={editing} placeholder="e.g. City Centre" onChange={set("bankBranch")} />
+                        <Field label="Bank Name" value={d.bankName} editing={editing} placeholder="e.g. GT Bank" onChange={set("bankName")} />
+                        <Field label="Branch" value={d.bankBranch} editing={editing} placeholder="e.g. Victoria Island" onChange={set("bankBranch")} />
                         <Field label="Account Name" value={d.bankAccountName} editing={editing} placeholder="Account holder name" onChange={set("bankAccountName")} />
-                        <Field label="Account Number" value={d.bankAccountNumber} editing={editing} placeholder="e.g. 00000000" onChange={set("bankAccountNumber")} />
+                        <Field label="Account Number" value={d.bankAccountNumber} editing={editing} placeholder="e.g. 0123456789" onChange={set("bankAccountNumber")} />
                       </div>
                     </div>
                     <div className="border border-border rounded-xl p-4 space-y-3">
-                      <h4 className="text-sm font-semibold flex items-center gap-1.5"><Hash className="w-4 h-4" /> Tax & Pension Information</h4>
-                      <Field label="Tax ID / TIN" value={d.taxId} editing={editing} placeholder="Tax identification number" onChange={set("taxId")} />
-                      <Field label="Pension ID" value={d.pensionId} editing={editing} placeholder="Pension scheme ID" onChange={set("pensionId")} />
+                      <h4 className="text-sm font-semibold flex items-center gap-1.5"><Hash className="w-4 h-4" /> Tax & Pension</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="Tax ID (T.I.N)" value={d.taxId} editing={editing} placeholder="Tax identification number" onChange={set("taxId")} />
+                        <Field label="Pension ID" value={d.pensionId} editing={editing} placeholder="Pension scheme ID" onChange={set("pensionId")} />
+                        <Field label="PFA Name" value={d.pfaName} editing={editing} placeholder="Pension Fund Administrator" onChange={set("pfaName")} />
+                        <Field label="RSA PIN" value={d.rsaPin} editing={editing} placeholder="Retirement Savings Account PIN" onChange={set("rsaPin")} />
+                      </div>
                       <Field label="HMO (Health Insurance)" value={d.hmo} editing={editing} placeholder="e.g. AXA / Hygeia plan name or ID" onChange={set("hmo")} />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Emergency Tab */}
+              {/* ── Next of Kin Tab ───────────────────────────────────── */}
               {tab === "emergency" && (
                 <div className="space-y-5">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                    <Heart className="w-3.5 h-3.5" /> Emergency Contact
+                    <Heart className="w-3.5 h-3.5" /> Next of Kin
                   </h3>
                   <div className="grid grid-cols-1 gap-4">
-                    <Field label="Contact Name" value={d.emergencyContactName} editing={editing} placeholder="Full name" onChange={set("emergencyContactName")} />
+                    <Field label="Name of Next of Kin" value={d.emergencyContactName} editing={editing} placeholder="Full name" onChange={set("emergencyContactName")} />
+                    <TextareaField label="Address of Next of Kin" value={d.emergencyContactAddress} editing={editing} onChange={set("emergencyContactAddress")} />
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="Phone Number" value={d.emergencyContactPhone} editing={editing} type="tel" placeholder="+1 555 000 0000" onChange={set("emergencyContactPhone")} />
-                      <Field label="Relationship" value={d.emergencyContactRelation} editing={editing} placeholder="e.g. Spouse, Parent" onChange={set("emergencyContactRelation")} />
+                      <Field label="Mobile" value={d.emergencyContactPhone} editing={editing} type="tel" placeholder="+234 800 000 0000" onChange={set("emergencyContactPhone")} />
+                      <Field label="Relationship" value={d.emergencyContactRelation} editing={editing} placeholder="e.g. Spouse, Parent, Sibling" onChange={set("emergencyContactRelation")} />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Documents Tab */}
+              {/* ── Beneficiaries Tab ─────────────────────────────────── */}
+              {tab === "beneficiaries" && <BeneficiariesTab staffId={staffId} canEdit={canEdit} />}
+
+              {/* ── Work Experience Tab ───────────────────────────────── */}
+              {tab === "experience" && <WorkExperienceTab staffId={staffId} canEdit={canEdit} />}
+
+              {/* ── Education Tab ─────────────────────────────────────── */}
+              {tab === "education" && <EducationTab staffId={staffId} canEdit={canEdit} />}
+
+              {/* ── References Tab ────────────────────────────────────── */}
+              {tab === "references" && <ReferencesTab staffId={staffId} canEdit={canEdit} />}
+
+              {/* ── Documents Tab ─────────────────────────────────────── */}
               {tab === "documents" && (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -452,7 +1007,6 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
                     )}
                   </div>
 
-                  {/* Add Document Form */}
                   {addingDoc && (
                     <div className="border border-primary/30 bg-primary/5 rounded-xl p-4 space-y-3">
                       <p className="text-xs font-semibold text-primary">New Document Record</p>
@@ -513,7 +1067,6 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
                     </div>
                   )}
 
-                  {/* Document List */}
                   {(documents as any[]).length === 0 && !addingDoc ? (
                     <div className="text-center py-10 text-muted-foreground">
                       <AlertCircle className="w-8 h-8 mx-auto mb-2 opacity-30" />
@@ -528,22 +1081,19 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
                           <div key={doc.id} className="border border-border rounded-xl p-3.5 flex items-start gap-3 hover:bg-muted/20 transition-colors">
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <p className="font-semibold text-sm truncate">{doc.name}</p>
-                                <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${info.color}`}>{info.label}</span>
+                                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${info.color}`}>{info.label}</span>
+                                <p className="text-sm font-medium truncate">{doc.name}</p>
                               </div>
-                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                                {doc.receivedDate && (
-                                  <span>Received: {new Date(doc.receivedDate).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" })}</span>
-                                )}
-                                {doc.uploadedByName && <span>Logged by: {doc.uploadedByName}</span>}
+                              <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                {doc.receivedDate && <span>Received: {new Date(doc.receivedDate).toLocaleDateString()}</span>}
+                                {doc.uploadedByName && <span>Added by {doc.uploadedByName}</span>}
                               </div>
                               {doc.notes && <p className="text-xs text-muted-foreground mt-1 italic">{doc.notes}</p>}
                             </div>
                             {canEdit && (
-                              <button
-                                onClick={() => { if (confirm("Remove this document record?")) deleteDoc.mutate(doc.id); }}
-                                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0">
-                                <Trash2 className="w-4 h-4" />
+                              <button onClick={() => deleteDoc.mutate(doc.id)}
+                                className="p-1.5 rounded-lg hover:bg-red-50 hover:text-red-600 text-muted-foreground shrink-0 transition-colors">
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
@@ -551,21 +1101,17 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
                       })}
                     </div>
                   )}
-
-                  <p className="text-xs text-muted-foreground italic">
-                    This is a record of documents received — attach physical files or scans in your file management system.
-                  </p>
                 </div>
               )}
 
-              {/* Notes Tab */}
+              {/* ── Notes Tab ─────────────────────────────────────────── */}
               {tab === "notes" && (
                 <div className="space-y-5">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex items-center gap-2">
-                    <FileText className="w-3.5 h-3.5" /> HR Notes
+                    <FileText className="w-3.5 h-3.5" /> Internal Notes
                   </h3>
-                  <TextareaField label="Internal Notes" value={d.notes} editing={editing} placeholder="Any internal HR notes about this employee…" onChange={set("notes")} />
-                  <p className="text-xs text-muted-foreground italic">These notes are visible to HR admins only.</p>
+                  <TextareaField label="Notes" value={d.notes} editing={editing}
+                    placeholder="Add any internal notes about this employee…" onChange={set("notes")} />
                 </div>
               )}
             </>
@@ -576,159 +1122,94 @@ function StaffPanel({ staffId, canEdit, onClose, onUpdated }: {
   );
 }
 
-// ── Main Staff Page ────────────────────────────────────────────────────────────
-export default function Staff() {
+// ── Staff List Page ────────────────────────────────────────────────────────────
+export default function StaffPage() {
   const { user } = useAuth();
-  const qc = useQueryClient();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [filterDept, setFilterDept] = useState("");
-  const [filterRole, setFilterRole] = useState("");
-  const [selectedId, setSelectedId] = useState<number | null>(() => {
-    const p = new URLSearchParams(window.location.search);
-    const id = p.get("id");
-    return id ? Number(id) : null;
-  });
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  const canEdit = user?.role === "admin" || user?.role === "super_admin" || user?.role === "manager";
-
-  const { data: users = [], isLoading } = useQuery<any[]>({
+  const { data: staffList = [], isLoading } = useQuery<any[]>({
     queryKey: ["staff-list"],
     queryFn: () => apiFetchJson("/api/users"),
   });
 
-  const departments = useMemo(() => [...new Set((users as any[]).map(u => u.department).filter(Boolean))].sort(), [users]);
+  const canEdit = user?.role === "admin" || user?.role === "super_admin" || user?.role === "manager";
 
   const filtered = useMemo(() => {
+    if (!search.trim()) return staffList as any[];
     const q = search.toLowerCase();
-    return (users as any[]).filter(u => {
-      const matchQ = !q || u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q) || u.staffId?.toLowerCase().includes(q);
-      const matchDept = !filterDept || u.department === filterDept;
-      const matchRole = !filterRole || u.role === filterRole;
-      return matchQ && matchDept && matchRole;
-    });
-  }, [users, search, filterDept, filterRole]);
+    return (staffList as any[]).filter((s: any) =>
+      s.name?.toLowerCase().includes(q) ||
+      s.email?.toLowerCase().includes(q) ||
+      s.department?.toLowerCase().includes(q) ||
+      s.jobTitle?.toLowerCase().includes(q) ||
+      s.staffId?.toLowerCase().includes(q)
+    );
+  }, [staffList, search]);
 
   const handleUpdated = useCallback((updated: any) => {
-    qc.setQueryData(["staff-list"], (old: any[]) =>
-      (old ?? []).map(u => u.id === updated.id ? updated : u)
+    queryClient.setQueryData(["staff-list"], (old: any[] | undefined) =>
+      old ? old.map(s => s.id === updated.id ? updated : s) : old
     );
-    qc.setQueryData(["staff-detail", updated.id], updated);
-  }, [qc]);
+  }, [queryClient]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+    <div className="p-6 max-w-5xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Staff Profiles</h1>
-          <p className="text-muted-foreground text-sm mt-1">
-            Manage employee details, banking, tax, and emergency contacts
-          </p>
-        </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Users className="w-4 h-4" />
-          <span>{(users as any[]).length} staff members</span>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Users className="w-6 h-6 text-primary" /> Staff Profiles</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">View and manage employee records</p>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-3">
-        <div className="relative flex-1 min-w-48">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search name, email, staff ID…"
-            className="w-full pl-9 pr-4 py-2 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
-          />
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <input
+          value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search by name, email, department, job title or staff ID…"
+          className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">Loading staff…</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <Users className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p>{search ? "No staff match your search" : "No staff members found"}</p>
         </div>
-        <select value={filterDept} onChange={e => setFilterDept(e.target.value)}
-          className="px-3 py-2 rounded-xl border border-border bg-background text-sm outline-none">
-          <option value="">All Departments</option>
-          {departments.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select value={filterRole} onChange={e => setFilterRole(e.target.value)}
-          className="px-3 py-2 rounded-xl border border-border bg-background text-sm outline-none">
-          <option value="">All Roles</option>
-          <option value="employee">Employee</option>
-          <option value="manager">Manager</option>
-          <option value="admin">Admin</option>
-          <option value="super_admin">Super Admin</option>
-        </select>
-        {(search || filterDept || filterRole) && (
-          <button onClick={() => { setSearch(""); setFilterDept(""); setFilterRole(""); }}
-            className="px-3 py-2 text-xs text-muted-foreground hover:text-foreground underline">
-            Clear
-          </button>
-        )}
-      </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((s: any) => (
+            <button key={s.id} onClick={() => setSelectedId(s.id)}
+              className="w-full flex items-center gap-4 p-4 rounded-2xl border border-border bg-background hover:bg-muted/30 hover:border-primary/30 transition-all text-left">
+              <Avatar name={s.name} photo={s.profilePhoto} size={44} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="font-semibold text-sm">{s.name}</p>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-semibold capitalize ${ROLE_COLORS[s.role] ?? "bg-muted text-muted-foreground"}`}>
+                    {s.role.replace("_", " ")}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground flex-wrap">
+                  {s.jobTitle && <span>{s.jobTitle}</span>}
+                  {s.department && <span className="text-muted-foreground/60">·</span>}
+                  {s.department && <span>{s.department}</span>}
+                  {s.email && <span className="text-muted-foreground/60">·</span>}
+                  {s.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{s.email}</span>}
+                </div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0" />
+            </button>
+          ))}
+        </div>
+      )}
 
-      {/* Table */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 border-b border-border">
-            <tr>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground">Employee</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Department / Role</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Contact</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Staff ID</th>
-              <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Profile</th>
-              <th className="w-12" />
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {isLoading ? (
-              <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">Loading…</td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">No staff match your search</td></tr>
-            ) : filtered.map((u: any) => {
-              const hasProfile = !!(u.address || u.bankName || u.taxId || u.emergencyContactName || u.dateOfBirth);
-              return (
-                <tr key={u.id}
-                  onClick={() => setSelectedId(u.id)}
-                  className="hover:bg-muted/30 cursor-pointer transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={u.name} photo={u.profilePhoto} size={36} />
-                      <div>
-                        <p className="font-semibold leading-tight">{u.name}</p>
-                        <p className="text-xs text-muted-foreground">{u.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 hidden sm:table-cell">
-                    <p className="text-sm">{u.department ?? <span className="text-muted-foreground/60 italic">No dept</span>}</p>
-                    <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full capitalize ${ROLE_COLORS[u.role] ?? "bg-muted text-muted-foreground"}`}>
-                      {u.role?.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell text-muted-foreground text-xs">
-                    {u.phone && <div className="flex items-center gap-1"><Phone className="w-3 h-3" />{u.phone}</div>}
-                    {u.jobTitle && <div className="mt-0.5">{u.jobTitle}</div>}
-                  </td>
-                  <td className="px-4 py-3 hidden lg:table-cell">
-                    <span className="font-mono text-xs text-muted-foreground">{u.staffId ?? "—"}</span>
-                  </td>
-                  <td className="px-4 py-3 hidden lg:table-cell">
-                    {hasProfile ? (
-                      <span className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">Complete</span>
-                    ) : (
-                      <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">Incomplete</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3">
-                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Detail panel */}
       {selectedId !== null && (
         <StaffPanel
           staffId={selectedId}
-          canEdit={canEdit || selectedId === user?.id}
+          canEdit={canEdit}
           onClose={() => setSelectedId(null)}
           onUpdated={handleUpdated}
         />
