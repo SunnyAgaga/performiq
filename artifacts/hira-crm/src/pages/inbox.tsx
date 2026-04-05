@@ -38,7 +38,7 @@ interface ApiCustomer { id: number; name: string; phone: string | null; channel:
 interface ApiConversation {
   id: number;
   channel: "whatsapp" | "facebook" | "instagram";
-  status: "open" | "pending" | "resolved";
+  status: "open" | "engaged" | "pending" | "resolved";
   unreadCount: number;
   lastMessageAt: string | null;
   customer: ApiCustomer;
@@ -100,7 +100,7 @@ export default function Inbox() {
 
   const convParams = new URLSearchParams();
   if (tab === "queue") {
-    convParams.set("status", "open,pending");
+    convParams.set("status", "open,engaged,pending");
   } else if (filter !== "all") {
     convParams.set("status", filter);
   }
@@ -426,14 +426,14 @@ export default function Inbox() {
                 <div className="px-4 py-8 text-center">
                   <div className="text-white/20 text-3xl mb-2">✓</div>
                   <p className="text-white/40 text-xs font-medium">Queue is clear!</p>
-                  <p className="text-white/25 text-[11px] mt-1">No open or pending chats.</p>
+                  <p className="text-white/25 text-[11px] mt-1">No open, engaged, or pending chats.</p>
                 </div>
               )}
-              {["open", "pending"].map((status) => {
+              {["open", "engaged", "pending"].map((status) => {
                 const group = conversations.filter((c) => c.status === status);
                 if (group.length === 0) return null;
-                const groupLabel = status === "open" ? "🔴 New / Open" : "🟡 Pending";
-                const groupColor = status === "open" ? "text-red-300/70" : "text-yellow-300/70";
+                const groupLabel = status === "open" ? "🔴 New / Open" : status === "engaged" ? "🟢 Engaged" : "🟡 Pending";
+                const groupColor = status === "open" ? "text-red-300/70" : status === "engaged" ? "text-emerald-300/70" : "text-yellow-300/70";
                 return (
                   <div key={status}>
                     <div className={`px-4 pt-3 pb-1 flex items-center gap-2`}>
@@ -445,7 +445,7 @@ export default function Inbox() {
                       const isSelected = conv.id === selectedId;
                       const lockedByOther = conv.isLocked && conv.lockedByAgentId !== agent?.id;
                       const hasUnread = conv.unreadCount > 0;
-                      const isLive = conv.status === "open" && hasUnread;
+                      const isLive = (conv.status === "open" || conv.status === "engaged") && hasUnread;
                       const lastMsgPreview = conv.lastMessage
                         ? (conv.lastMessage.sender === "agent" ? `You: ${conv.lastMessage.content}` : conv.lastMessage.sender === "bot" ? `🤖 ${conv.lastMessage.content}` : conv.lastMessage.content)
                         : conv.customer.phone ?? "—";
@@ -460,7 +460,7 @@ export default function Inbox() {
                         >
                           <div className="relative shrink-0">
                             <div className={`h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold text-white ${
-                              conv.status === "open" ? "bg-red-500/60" : "bg-yellow-500/60"
+                              conv.status === "open" ? "bg-red-500/60" : conv.status === "engaged" ? "bg-emerald-500/60" : "bg-yellow-500/60"
                             }`}>
                               {conv.customer.name.charAt(0).toUpperCase()}
                             </div>
@@ -470,7 +470,7 @@ export default function Inbox() {
                                 <span className="relative inline-flex rounded-full h-3 w-3 bg-green-400 border-2 border-[#3F0E40]" />
                               </span>
                             ) : (
-                              <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#3F0E40] ${conv.status === "open" ? "bg-red-400/60" : "bg-yellow-400/60"}`} />
+                              <span className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-[#3F0E40] ${conv.status === "open" ? "bg-red-400/60" : conv.status === "engaged" ? "bg-emerald-400/60" : "bg-yellow-400/60"}`} />
                             )}
                             {lockedByOther && (
                               <Tooltip>
@@ -779,6 +779,7 @@ export default function Inbox() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="engaged">Engaged</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
                   <SelectItem value="resolved">Resolved</SelectItem>
                 </SelectContent>
