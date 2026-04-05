@@ -22,6 +22,7 @@ import followUpSettingsRouter from "./follow-up-settings.js";
 import customerGroupsRouter from "./customer-groups.js";
 import sitesRouter from "./sites.js";
 import paymentConfigsRouter from "./payment-configs.js";
+import paymentsRouter from "./payments.js";
 
 const router = Router();
 
@@ -51,5 +52,6 @@ router.use(followUpSettingsRouter);
 router.use(customerGroupsRouter);
 router.use(sitesRouter);
 router.use(paymentConfigsRouter);
+router.use(paymentsRouter);
 
 export default router;

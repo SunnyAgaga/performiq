@@ -20,6 +20,10 @@ export { RetentionSettings } from "./RetentionSettings.js";
 export { FollowUpRule } from "./FollowUpRule.js";
 export { Site } from "./Site.js";
 export { PaymentConfig } from "./PaymentConfig.js";
+export { PaymentTransaction } from "./PaymentTransaction.js";
+export type { TxStatus, TxProvider, TxCurrency } from "./PaymentTransaction.js";
+export { PaymentLink } from "./PaymentLink.js";
+export type { LinkStatus } from "./PaymentLink.js";
 
 import { Agent } from "./Agent.js";
 import { Customer } from "./Customer.js";

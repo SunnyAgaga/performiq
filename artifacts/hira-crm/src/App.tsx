@@ -25,6 +25,7 @@ import ClockIn from "@/pages/clock-in";
 import PublicFeedback from "@/pages/public-feedback";
 import KpiPage from "@/pages/kpi";
 import ContactsAnalyticsPage from "@/pages/contacts-analytics";
+import PaymentsPage from "@/pages/payments";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -76,6 +77,7 @@ function Router() {
       <Route path="/clock-in" component={() => <PrivateRoute component={ClockIn} />} />
       <Route path="/kpi" component={() => <PrivateRoute component={KpiPage} />} />
       <Route path="/contacts-analytics" component={() => <PrivateRoute component={ContactsAnalyticsPage} />} />
+      <Route path="/payments" component={() => <PrivateRoute component={PaymentsPage} />} />
       <Route path="/feedback-form" component={PublicFeedback} />
       <Route component={NotFound} />
     </Switch>
