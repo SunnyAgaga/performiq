@@ -69,9 +69,16 @@ const NAV_ENTRIES: NavEntry[] = [
       { name: "Cycles",     path: "/cycles",     icon: RefreshCcw,    roles: ["super_admin", "admin", "manager"] },
     ],
   },
-  { name: "Leave",       path: "/leave",        icon: CalendarDays,        roles: ["super_admin", "admin", "manager", "employee"] },
-  { name: "Attendance",  path: "/attendance",   icon: Clock,               roles: ["super_admin", "admin", "manager", "employee"] },
-  { name: "Timesheets",  path: "/timesheets",   icon: ClipboardCheck,      roles: ["super_admin", "admin", "manager", "employee"] },
+  {
+    name: "Workforce",
+    icon: Clock,
+    roles: ["super_admin", "admin", "manager", "employee"],
+    children: [
+      { name: "Leave",      path: "/leave",      icon: CalendarDays,   roles: ["super_admin", "admin", "manager", "employee"] },
+      { name: "Attendance", path: "/attendance", icon: Clock,          roles: ["super_admin", "admin", "manager", "employee"] },
+      { name: "Timesheets", path: "/timesheets", icon: ClipboardCheck, roles: ["super_admin", "admin", "manager", "employee"] },
+    ],
+  },
   { name: "Onboarding",  path: "/onboarding",   icon: UserPlus,            roles: ["super_admin", "admin"], customRoles: ["hr manager"] },
   { name: "Staff",       path: "/staff",         icon: IdCard,              roles: ["super_admin", "admin", "manager"], customRoles: ["hr manager"] },
   { name: "HR Queries",  path: "/hr-queries",   icon: MessageSquareWarning, roles: ["super_admin", "admin", "manager", "employee"], customRoles: ["hr manager"] },
@@ -124,10 +131,13 @@ function NavLinks({ user, onNavigate }: NavLinksProps) {
 
   // Figure out if any KPI child is currently active (for auto-expand)
   const kpiPaths = ["/appraisals", "/goals", "/criteria", "/cycles"];
+  const workforcePaths = ["/leave", "/attendance", "/timesheets"];
   const isInsideKpi = kpiPaths.some(p => location === p || location.startsWith(`${p}/`));
+  const isInsideWorkforce = workforcePaths.some(p => location === p || location.startsWith(`${p}/`));
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
     KPI: isInsideKpi,
+    Workforce: isInsideWorkforce,
   }));
 
   const toggleGroup = (name: string) =>
