@@ -83,10 +83,17 @@ const NAV_ENTRIES: NavEntry[] = [
   { name: "Staff",       path: "/staff",         icon: IdCard,              roles: ["super_admin", "admin", "manager"], customRoles: ["hr manager"] },
   { name: "HR Queries",  path: "/hr-queries",   icon: MessageSquareWarning, roles: ["super_admin", "admin", "manager", "employee"], customRoles: ["hr manager"] },
   { name: "Reports",     path: "/reports",      icon: BarChart3,           roles: ["super_admin", "admin"] },
-  { name: "Users",       path: "/users",        icon: Users,               roles: ["super_admin", "admin"] },
-  { name: "Departments", path: "/departments",  icon: Building2,           roles: ["super_admin", "admin"] },
-  { name: "Sites",       path: "/sites",        icon: MapPin,              roles: ["super_admin", "admin"] },
-  { name: "Roles",       path: "/roles",        icon: Shield,              roles: ["super_admin", "admin"] },
+  {
+    name: "Administration",
+    icon: Building2,
+    roles: ["super_admin", "admin"],
+    children: [
+      { name: "Users",       path: "/users",       icon: Users,    roles: ["super_admin", "admin"] },
+      { name: "Departments", path: "/departments", icon: Building2, roles: ["super_admin", "admin"] },
+      { name: "Sites",       path: "/sites",       icon: MapPin,   roles: ["super_admin", "admin"] },
+      { name: "Roles",       path: "/roles",       icon: Shield,   roles: ["super_admin", "admin"] },
+    ],
+  },
   { name: "Security",    path: "/security",     icon: ShieldAlert,         roles: ["super_admin", "admin"] },
   { name: "Appearance",  path: "/appearance",   icon: Paintbrush,          roles: ["super_admin", "admin"] },
 ];
@@ -132,12 +139,15 @@ function NavLinks({ user, onNavigate }: NavLinksProps) {
   // Figure out if any KPI child is currently active (for auto-expand)
   const kpiPaths = ["/appraisals", "/goals", "/criteria", "/cycles"];
   const workforcePaths = ["/leave", "/attendance", "/timesheets"];
+  const adminPaths = ["/users", "/departments", "/sites", "/roles"];
   const isInsideKpi = kpiPaths.some(p => location === p || location.startsWith(`${p}/`));
   const isInsideWorkforce = workforcePaths.some(p => location === p || location.startsWith(`${p}/`));
+  const isInsideAdmin = adminPaths.some(p => location === p || location.startsWith(`${p}/`));
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
     KPI: isInsideKpi,
     Workforce: isInsideWorkforce,
+    Administration: isInsideAdmin,
   }));
 
   const toggleGroup = (name: string) =>
