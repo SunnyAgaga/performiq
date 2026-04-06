@@ -174,7 +174,7 @@ function NavLinks({ user, onNavigate }: NavLinksProps) {
     `flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-semibold text-sm ${
       active
         ? "bg-primary text-primary-foreground shadow-sm"
-        : "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+        : "text-foreground hover:bg-muted hover:text-foreground"
     }`;
 
   return (
@@ -197,7 +197,7 @@ function NavLinks({ user, onNavigate }: NavLinksProps) {
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 font-bold text-sm ${
                   isGroupActive && !isOpen
                     ? "bg-primary/10 text-primary"
-                    : "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                    : "text-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 <entry.icon className="w-5 h-5 shrink-0" />
