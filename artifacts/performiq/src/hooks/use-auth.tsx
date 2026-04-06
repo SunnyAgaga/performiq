@@ -10,6 +10,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (token: string, user: User) => void;
   logout: () => void;
+  refreshUser: () => Promise<void>;
+  setUser: (u: User) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -59,8 +61,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLocation("/login");
   };
 
+  const refreshUser = async () => {
+    const storedToken = localStorage.getItem("token");
+    if (!storedToken) return;
+    try {
+      const userData = await getMe({ headers: { Authorization: `Bearer ${storedToken}` } });
+      setUser(userData);
+    } catch {
+      // silent
+    }
+  };
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, refreshUser, setUser }}>
       {children}
     </AuthContext.Provider>
   );

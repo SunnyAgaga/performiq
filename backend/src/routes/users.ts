@@ -184,8 +184,8 @@ router.put("/users/:id/profile-photo", requireAuth, async (req: AuthRequest, res
     if (role === "employee" && actorId !== targetId) {
       return res.status(403).json({ error: "Forbidden" });
     }
-    const { profilePhoto } = req.body as { profilePhoto: string };
-    if (!profilePhoto) return res.status(400).json({ error: "profilePhoto is required" });
+    const { profilePhoto } = req.body as { profilePhoto: string | null };
+    if (profilePhoto === undefined) return res.status(400).json({ error: "profilePhoto is required" });
     const [updated] = await db.update(usersTable)
       .set({ profilePhoto })
       .where(eq(usersTable.id, targetId))
