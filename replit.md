@@ -20,7 +20,7 @@ The project uses a standalone architecture with separate frontend and backend di
 
 ## Application Structure:
 - `frontend/`: React + Vite web application
-- `backend/`: Express 5 API server
+- `backend/`: Express 5 API server (port 8080)
 
 ### Frontend (`frontend/`):
 - React + Vite SPA with TailwindCSS 4
@@ -39,18 +39,31 @@ The project uses a standalone architecture with separate frontend and backend di
 - Auth: JWT + bcryptjs, role-based (super_admin > admin > manager > employee)
 - Logging: pino + pino-http
 - Email: Mailgun integration
-- Dev mode: proxies non-API requests to Vite dev server on port 3000
+- Dev mode: spawns Vite dev server on port 3000 and proxies non-API requests to it
 - Prod mode: serves static frontend from `frontend/dist/public/`
+- Seeder: `npm run db:seed` seeds demo users, cycles, criteria, appraisals, goals
+
+## Proxy Architecture (Development):
+```
+Port 80 (Replit proxy) → Port 8080 (PerformIQ backend)
+  /api/*     → PerformIQ Express routes
+  /*         → Port 3000 (PerformIQ Vite dev server)
+```
 
 ## Authentication:
 - JWTs stored in `localStorage` as "token"
 - All API calls include `Authorization: Bearer <token>`
 - Role hierarchy: `super_admin`(4) > `admin`(3) > `manager`(2) > `employee`(1)
 
-## Login credentials:
-- admin@performiq.com / Admin@2024
-- hruser@performiq.com / HrUser@2024
-- omotola@performiq.com / Omotola@2024
+## Login credentials (seeded via `npm run db:seed` in backend/):
+- admin@performiq.com / password — Admin
+- sarah@performiq.com / password — Manager (Engineering)
+- james@performiq.com / password — Manager (Product)
+- alice@performiq.com / password — Employee (Engineering)
+- bob@performiq.com / password — Employee (Engineering)
+- carol@performiq.com / password — Employee (Product)
+- david@performiq.com / password — Employee (Product)
+- Legacy: admin@performiq.com / Admin@2024, hruser@performiq.com / HrUser@2024
 
 ## UI/UX:
 - Sidebar navigation with bold/semibold black text on white background, active items use primary highlight
@@ -61,7 +74,6 @@ The project uses a standalone architecture with separate frontend and backend di
 ## Ports:
 - Frontend (Vite dev): 3000
 - Backend (Express): 8080
-- In development, backend proxies non-API routes to frontend via http-proxy-middleware
 
 ## External Dependencies:
 - **PostgreSQL**: Primary database via Drizzle ORM
