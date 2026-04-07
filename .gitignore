@@ -61,3 +61,17 @@ tmp/
 attached_assets/
 .cursor/
 .github/instructions/
+.replit
+.replitignore
+.upm/
+.agents/
+scripts/
+replit.md
+pnpm-workspace.yaml
+pnpm-lock.yaml
+
+# Artifacts (Replit-managed, not for git)
+artifacts/
+
+# Lock files (use npm)
+yarn.lock

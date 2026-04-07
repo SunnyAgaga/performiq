@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -15,6 +16,12 @@ const app: Express = express();
 app.use(
   pinoHttp({
     logger,
+    autoLogging: {
+      ignore: (req: any) => {
+        const url = req.url || "";
+        return !url.startsWith("/api");
+      },
+    },
     serializers: {
       req(req) {
         return {
@@ -56,10 +63,21 @@ app.use("/api/auth/verify-otp", authLimiter);
 
 app.use("/api", router);
 
-const frontendDist = path.resolve(__dirname, "../../frontend/dist/public");
-app.use(express.static(frontendDist));
-app.get("/{*path}", (_req, res) => {
-  res.sendFile(path.join(frontendDist, "index.html"));
-});
+if (process.env.NODE_ENV === "development") {
+  app.use(
+    "/",
+    createProxyMiddleware({
+      target: "http://localhost:3000",
+      changeOrigin: true,
+      ws: true,
+    }),
+  );
+} else {
+  const frontendDist = path.resolve(__dirname, "../../frontend/dist/public");
+  app.use(express.static(frontendDist));
+  app.get("/{*path}", (_req, res) => {
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+}
 
 export default app;
