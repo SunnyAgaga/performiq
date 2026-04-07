@@ -17,6 +17,37 @@ env = { "CI" = "true" }
 [workflows]
 runButton = "Project"
 
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "CommsCRM Server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "CommsCRM Frontend"
+
+[[workflows.workflow]]
+name = "CommsCRM Server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd commscrm-temp/backend && CRM_PORT=3002 NODE_ENV=development node --enable-source-maps ./dist/index.mjs"
+waitForPort = 3002
+
+[[workflows.workflow]]
+name = "CommsCRM Frontend"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd commscrm-temp/frontend && PORT=4000 node node_modules/.bin/vite --host 0.0.0.0 --port 4000 --strictPort"
+waitForPort = 4000
+
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
