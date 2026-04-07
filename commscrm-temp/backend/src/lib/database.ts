@@ -19,7 +19,7 @@ export const sequelize = new Sequelize(DATABASE_URL, {
     : false,
   pool: {
     max: 10,
-    min: 0,
+    min: 1,
     acquire: 30000,
     idle: 10000,
   },

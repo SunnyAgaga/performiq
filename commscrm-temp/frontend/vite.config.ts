@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
 const port = Number(process.env.PORT || 4000);
-const basePath = process.env.BASE_PATH || "/";
+const basePath = process.env.BASE_PATH || "/crm/";
 
 export default defineConfig({
   base: basePath,

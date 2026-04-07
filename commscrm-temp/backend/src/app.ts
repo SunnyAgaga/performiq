@@ -50,19 +50,12 @@ app.use("/api/auth/login", authLimiter);
 
 app.use("/api", router);
 
-if (process.env.NODE_ENV === "development") {
-  const { createProxyMiddleware } = await import("http-proxy-middleware");
-  app.use(
-    "/",
-    createProxyMiddleware({
-      target: "http://localhost:4000",
-      changeOrigin: true,
-      ws: true,
-      logLevel: "silent",
-    })
-  );
-} else {
-  const frontendDist = path.resolve(__dirname, "../frontend/dist/public");
+if (process.env.NODE_ENV !== "development") {
+  const frontendDist = path.resolve(__dirname, "../../frontend/dist/public");
+  app.use("/crm", express.static(frontendDist));
+  app.get("/crm/*path", (_req, res) => {
+    res.sendFile(path.resolve(frontendDist, "index.html"));
+  });
   app.use(express.static(frontendDist));
   app.get("*path", (_req, res) => {
     res.sendFile(path.resolve(frontendDist, "index.html"));
