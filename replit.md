@@ -85,10 +85,15 @@ Port 80 (Replit proxy) → Port 8080 (PerformIQ backend)
 - Login: superadmin@commscrm.com / superadmin123
 
 ## Login credentials:
-### PerformIQ:
-- admin@performiq.com / Admin@2024
-- hruser@performiq.com / HrUser@2024
-- omotola@performiq.com / Omotola@2024
+### PerformIQ (seeded via `npm run db:seed` in backend/):
+- admin@performiq.com / password — Admin
+- sarah@performiq.com / password — Manager (Engineering)
+- james@performiq.com / password — Manager (Product)
+- alice@performiq.com / password — Employee (Engineering)
+- bob@performiq.com / password — Employee (Engineering)
+- carol@performiq.com / password — Employee (Product)
+- david@performiq.com / password — Employee (Product)
+- Legacy: admin@performiq.com / Admin@2024, hruser@performiq.com / HrUser@2024
 
 ### CommsCRM:
 - superadmin@commscrm.com / superadmin123
