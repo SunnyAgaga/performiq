@@ -4,7 +4,7 @@ import { useGetAppraisal, useUpdateAppraisal } from "../lib";
 import { useQueryClient } from "@tanstack/react-query";
 import { PageHeader, Card, StatusBadge, Button, Label } from "@/components/shared";
 import { useAuth } from "@/hooks/use-auth";
-import { CheckCircle2, User, Star, FileText, ShieldCheck, ThumbsUp, ArrowRight, Users, MessageSquare, ArrowLeft } from "lucide-react";
+import { CheckCircle2, User, Star, FileText, ShieldCheck, ThumbsUp, ArrowRight, Users, MessageSquare, ArrowLeft, RotateCcw, Target } from "lucide-react";
 import { format } from "date-fns";
 
 const WORKFLOW_ROUTES: Record<string, { label: string; steps: string[] }> = {
@@ -66,8 +66,9 @@ export default function AppraisalDetail() {
     }));
   };
 
-  const handleActualValueChange = (criterionId: number, actualVal: number, targetVal: number) => {
-    const computed = targetVal > 0 ? Math.min(5, (actualVal / targetVal) * 5) : 0;
+  const handleActualValueChange = (criterionId: number, actualVal: number, targetVal: number, budgetVal?: number) => {
+    const effectiveTarget = budgetVal && budgetVal > 0 ? budgetVal : targetVal;
+    const computed = effectiveTarget > 0 ? Math.min(5, (actualVal / effectiveTarget) * 5) : 0;
     setScores(prev => ({
       ...prev,
       [criterionId]: { ...prev[criterionId], actualValue: actualVal, score: Math.round(computed * 10) / 10 }
@@ -244,36 +245,55 @@ export default function AppraisalDetail() {
                 const critType: string = crit.type ?? "rating";
                 const target = Number(crit.targetValue ?? (crit as any).target_value ?? 0);
                 const unit: string = crit.unit ?? "";
+                const budget = Number(scoreItem.budgetValue ?? (scoreItem as any).budget_value ?? 0);
+                const effectiveTarget = budget > 0 ? budget : target;
+                const periodLabel = (crit.targetPeriod ?? (crit as any).target_period) ? ((crit.targetPeriod ?? (crit as any).target_period) as string).replace('_', ' ') : null;
 
                 const ScoreInput = ({ color, isActive, isSelf }: { color: string; isActive: boolean; isSelf: boolean }) => {
                   if (!isActive) return null;
                   if (critType === "percentage" || critType === "value") {
-                    const computedPct = target > 0 && myVal.actualValue != null ? Math.min(100, (myVal.actualValue / target) * 100) : null;
+                    const computedPct = effectiveTarget > 0 && myVal.actualValue != null ? Math.min(100, (myVal.actualValue / effectiveTarget) * 100) : null;
+                    const weightedScore = computedPct != null ? (computedPct / 100) * Number(crit.weight) : null;
                     return (
                       <div className="space-y-3">
+                        {budget > 0 && (
+                          <div className="flex items-center gap-2 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg">
+                            <Target className="w-4 h-4 text-emerald-600 shrink-0" />
+                            <div className="text-sm">
+                              <span className="font-semibold text-emerald-700">Budget Target: {effectiveTarget.toLocaleString()}{unit ? ` ${unit}` : ""}</span>
+                              {periodLabel && <span className="text-emerald-600 ml-1 text-xs">({periodLabel})</span>}
+                            </div>
+                          </div>
+                        )}
                         <div>
                           <Label>{critType === "percentage" ? `Actual %${unit ? ` (${unit})` : ""}` : `Actual Value${unit ? ` (${unit})` : ""}`}</Label>
                           <div className="flex items-center gap-2 mt-1">
                             <input
                               type="number" min="0" step="0.01"
                               value={myVal.actualValue ?? ""}
-                              onChange={e => handleActualValueChange(crit.id, parseFloat(e.target.value) || 0, target)}
+                              onChange={e => handleActualValueChange(crit.id, parseFloat(e.target.value) || 0, target, budget)}
                               className="flex-1 px-3 py-2 rounded-lg border border-border text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                              placeholder={critType === "percentage" ? `e.g. 85 (target: ${target}%)` : `e.g. ${target * 0.8} (target: ${target}${unit ? ` ${unit}` : ""})`}
+                              placeholder={`Target: ${effectiveTarget.toLocaleString()}${unit ? ` ${unit}` : ""}`}
                             />
                             {unit && <span className="text-sm text-muted-foreground font-medium shrink-0">{unit}</span>}
                           </div>
-                          {myVal.actualValue != null && target > 0 && (
-                            <div className="mt-2 flex items-center gap-3">
-                              <div className="flex-1 bg-muted rounded-full h-2">
-                                <div
-                                  className={`h-2 rounded-full transition-all ${color === 'amber' ? 'bg-amber-500' : 'bg-blue-500'}`}
-                                  style={{ width: `${Math.min(100, computedPct ?? 0)}%` }}
-                                />
+                          {myVal.actualValue != null && effectiveTarget > 0 && (
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 bg-muted rounded-full h-2.5">
+                                  <div
+                                    className={`h-2.5 rounded-full transition-all ${(computedPct ?? 0) >= 100 ? 'bg-green-500' : (computedPct ?? 0) >= 70 ? (color === 'amber' ? 'bg-amber-500' : 'bg-blue-500') : 'bg-red-400'}`}
+                                    style={{ width: `${Math.min(100, computedPct ?? 0)}%` }}
+                                  />
+                                </div>
+                                <span className={`text-sm font-bold ${(computedPct ?? 0) >= 100 ? 'text-green-700' : (computedPct ?? 0) >= 70 ? 'text-amber-700' : 'text-red-600'}`}>
+                                  {computedPct?.toFixed(1)}%
+                                </span>
                               </div>
-                              <span className={`text-xs font-bold ${color === 'amber' ? 'text-amber-700' : 'text-blue-700'}`}>
-                                {computedPct?.toFixed(0)}% → Score: {myVal.score.toFixed(1)}/5
-                              </span>
+                              <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Actual: {myVal.actualValue.toLocaleString()} / {effectiveTarget.toLocaleString()}{unit ? ` ${unit}` : ""}</span>
+                                <span>Weighted: {weightedScore?.toFixed(1)}% of {crit.weight}%</span>
+                              </div>
                             </div>
                           )}
                         </div>
@@ -320,19 +340,39 @@ export default function AppraisalDetail() {
                   );
                 };
 
-                const ScoreDisplay = ({ scoreVal, noteVal, waitingMsg }: { scoreVal: any; noteVal: any; waitingMsg?: string }) => (
-                  <div>
-                    {(critType === "percentage" || critType === "value") && scoreItem.actualValue != null ? (
-                      <div className="mb-2">
-                        <span className="text-xs text-muted-foreground">Actual: </span>
-                        <span className="font-semibold">{Number(scoreItem.actualValue).toLocaleString()}{unit ? ` ${unit}` : ""}</span>
-                        {target > 0 && <span className="text-xs text-muted-foreground ml-1">/ {target.toLocaleString()}{unit ? ` ${unit}` : ""} target</span>}
-                      </div>
-                    ) : null}
-                    <div className="text-3xl font-bold text-foreground mb-2">{scoreVal != null ? `${Number(scoreVal).toFixed(1)}/5` : '-'}</div>
-                    <p className="text-sm text-muted-foreground italic">{noteVal || waitingMsg || 'No comments provided.'}</p>
-                  </div>
-                );
+                const ScoreDisplay = ({ scoreVal, noteVal, waitingMsg }: { scoreVal: any; noteVal: any; waitingMsg?: string }) => {
+                  const actualVal = scoreItem.actualValue != null ? Number(scoreItem.actualValue) : null;
+                  const displayPct = actualVal != null && effectiveTarget > 0 ? Math.min(100, (actualVal / effectiveTarget) * 100) : null;
+                  const displayWeighted = displayPct != null ? (displayPct / 100) * Number(crit.weight) : null;
+                  return (
+                    <div>
+                      {(critType === "percentage" || critType === "value") && budget > 0 && (
+                        <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-lg mb-2">
+                          <Target className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="text-xs font-semibold text-emerald-700">Budget: {effectiveTarget.toLocaleString()}{unit ? ` ${unit}` : ""}</span>
+                          {periodLabel && <span className="text-xs text-emerald-600">({periodLabel})</span>}
+                        </div>
+                      )}
+                      {(critType === "percentage" || critType === "value") && actualVal != null ? (
+                        <div className="mb-2">
+                          <span className="text-xs text-muted-foreground">Actual: </span>
+                          <span className="font-semibold">{actualVal.toLocaleString()}{unit ? ` ${unit}` : ""}</span>
+                          <span className="text-xs text-muted-foreground ml-1">/ {effectiveTarget.toLocaleString()}{unit ? ` ${unit}` : ""}</span>
+                          {displayPct != null && (
+                            <span className={`ml-2 text-sm font-bold ${displayPct >= 100 ? 'text-green-700' : displayPct >= 70 ? 'text-amber-700' : 'text-red-600'}`}>
+                              ({displayPct.toFixed(1)}%)
+                            </span>
+                          )}
+                          {displayWeighted != null && (
+                            <span className="text-xs text-muted-foreground ml-1">Weighted: {displayWeighted.toFixed(1)}%/{crit.weight}%</span>
+                          )}
+                        </div>
+                      ) : null}
+                      <div className="text-3xl font-bold text-foreground mb-2">{scoreVal != null ? `${Number(scoreVal).toFixed(1)}/5` : '-'}</div>
+                      <p className="text-sm text-muted-foreground italic">{noteVal || waitingMsg || 'No comments provided.'}</p>
+                    </div>
+                  );
+                };
 
                 return (
                   <div className="grid md:grid-cols-2 gap-8 mt-6 pt-6 border-t border-border">
@@ -527,6 +567,38 @@ export default function AppraisalDetail() {
               }}
             >
               <ThumbsUp className="w-4 h-4" /> Approve &amp; Complete
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Resend for Review — available for admins/managers when appraisal is beyond self_review */}
+      {(user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'manager') &&
+        ['manager_review', 'pending_approval', 'completed'].includes(appraisal.status) && (
+        <Card className="p-6 mb-8 border-orange-200 bg-orange-50/40">
+          <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+            <RotateCcw className="w-5 h-5 text-orange-600" />
+            Resend for Review
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            If the budget values or scores are incorrect, you can send this appraisal back to the employee for re-evaluation.
+            This will reset all reviewer scores and return the appraisal to self-review status.
+          </p>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              className="border-orange-300 text-orange-700 hover:bg-orange-100 gap-2"
+              isLoading={updateMutation.isPending}
+              onClick={() => {
+                if (confirm('Resend this appraisal for review? This will reset all reviewer scores and return it to self-review status.')) {
+                  updateMutation.mutate(
+                    { id: appraisalId, data: { action: 'resend_review' } as any },
+                    { onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/appraisals/${appraisalId}`] }) }
+                  );
+                }
+              }}
+            >
+              <RotateCcw className="w-4 h-4" /> Resend for Review
             </Button>
           </div>
         </Card>

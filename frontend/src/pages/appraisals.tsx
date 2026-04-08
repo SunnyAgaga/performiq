@@ -32,6 +32,7 @@ export default function Appraisals() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({ cycleId: "", employeeId: "", workflowType: "admin_approval", criteriaGroupId: "" });
   const [reviewerSteps, setReviewerSteps] = useState<string[]>([""]); // array of user id strings
+  const [budgetValues, setBudgetValues] = useState<Record<number, string>>({});
 
   // Criteria groups
   const [criteriaGroups, setCriteriaGroups] = useState<any[]>([]);
@@ -113,12 +114,17 @@ export default function Appraisals() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const reviewerIds = needsReviewer ? reviewerSteps.map(Number).filter(Boolean) : [];
+    const budgetMap: Record<number, number> = {};
+    for (const [k, v] of Object.entries(budgetValues)) {
+      if (v && Number(v) > 0) budgetMap[Number(k)] = Number(v);
+    }
     const payload: any = {
       cycleId: parseInt(formData.cycleId),
       employeeId: parseInt(formData.employeeId),
       workflowType: formData.workflowType,
       reviewerIds,
       criteriaGroupId: formData.criteriaGroupId ? parseInt(formData.criteriaGroupId) : undefined,
+      budgetValues: Object.keys(budgetMap).length > 0 ? budgetMap : undefined,
     };
     createMutation.mutate(
       { data: payload },
@@ -128,6 +134,7 @@ export default function Appraisals() {
           setIsDialogOpen(false);
           setFormData({ cycleId: "", employeeId: "", workflowType: "admin_approval", criteriaGroupId: "" });
           setReviewerSteps([""]);
+          setBudgetValues({});
         }
       }
     );
@@ -333,6 +340,39 @@ export default function Appraisals() {
                   ))}
                 </select>
               </div>
+              {formData.criteriaGroupId && (() => {
+                const group = criteriaGroups.find((g: any) => String(g.id) === formData.criteriaGroupId);
+                const valueCriteria = group?.criteria?.filter((c: any) => c.type === 'value' || c.type === 'percentage') ?? [];
+                if (valueCriteria.length === 0) return null;
+                return (
+                  <div>
+                    <Label>Budget / Target Values <span className="text-muted-foreground font-normal text-xs">(set targets for this employee)</span></Label>
+                    <div className="space-y-2 mt-2 bg-muted/30 p-3 rounded-xl">
+                      {valueCriteria.map((c: any) => (
+                        <div key={c.id} className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{c.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              Default: {Number(c.targetValue ?? c.target_value ?? 0).toLocaleString()}{c.unit ? ` ${c.unit}` : ""}
+                              {(c.targetPeriod ?? c.target_period) && <> · {(c.targetPeriod ?? c.target_period).replace('_', ' ')}</>}
+                            </p>
+                          </div>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            className="w-40 px-3 py-2 rounded-lg border border-border text-sm outline-none focus:ring-2 focus:ring-primary/20"
+                            placeholder={String(c.targetValue ?? c.target_value ?? "")}
+                            value={budgetValues[c.id] ?? ""}
+                            onChange={e => setBudgetValues(prev => ({ ...prev, [c.id]: e.target.value }))}
+                          />
+                          {c.unit && <span className="text-xs text-muted-foreground shrink-0">{c.unit}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {needsReviewer && (
                 <div>
                   <div className="flex items-center justify-between mb-2">

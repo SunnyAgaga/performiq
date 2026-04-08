@@ -174,9 +174,21 @@ router.post("/appraisals", requireAuth, async (req: AuthRequest, res) => {
       criteriaToScore = criteriaToScore.filter(c => groupCriterionIds.has(c.id));
     }
 
+    const { budgetValues } = req.body;
+    const budgetMap: Record<number, number> = {};
+    if (budgetValues && typeof budgetValues === 'object') {
+      for (const [k, v] of Object.entries(budgetValues)) {
+        budgetMap[Number(k)] = Number(v);
+      }
+    }
+
     if (criteriaToScore.length > 0) {
       await db.insert(appraisalScoresTable).values(
-        criteriaToScore.map(c => ({ appraisalId: appraisal.id, criterionId: c.id }))
+        criteriaToScore.map(c => ({
+          appraisalId: appraisal.id,
+          criterionId: c.id,
+          budgetValue: budgetMap[c.id] != null ? String(budgetMap[c.id]) : null,
+        }))
       );
     }
 
@@ -219,6 +231,63 @@ router.put("/appraisals/:id", requireAuth, async (req: AuthRequest, res) => {
     if (!current) { res.status(404).json({ error: "Not found" }); return; }
 
     const updates: Partial<typeof appraisalsTable.$inferInsert> = {};
+
+    if (action === "resend_review") {
+      if (!["admin", "super_admin", "manager"].includes(req.user!.role)) {
+        res.status(403).json({ error: "Only admins/managers can resend for review" }); return;
+      }
+      if (req.user!.role === "manager") {
+        const isReviewer = await db.select().from(appraisalReviewersTable)
+          .where(and(eq(appraisalReviewersTable.appraisalId, appraisalId), eq(appraisalReviewersTable.reviewerId, req.user!.id)))
+          .limit(1);
+        const teamMembers = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.managerId, req.user!.id));
+        const isManager = teamMembers.some(m => m.id === current.employeeId);
+        if (isReviewer.length === 0 && !isManager) {
+          res.status(403).json({ error: "You can only resend appraisals for your team members or reviews assigned to you" }); return;
+        }
+      }
+      await db.update(appraisalReviewersTable)
+        .set({ status: 'pending', managerComment: null, reviewedAt: null })
+        .where(eq(appraisalReviewersTable.appraisalId, appraisalId));
+      await db.delete(appraisalReviewerScoresTable)
+        .where(eq(appraisalReviewerScoresTable.appraisalId, appraisalId));
+      updates.status = "self_review" as any;
+      updates.overallScore = null;
+      updates.managerComment = null;
+
+      const { budgetValues: resendBudgets } = req.body;
+      if (resendBudgets && typeof resendBudgets === 'object') {
+        for (const [critIdStr, val] of Object.entries(resendBudgets)) {
+          await db.update(appraisalScoresTable)
+            .set({ budgetValue: val != null ? String(val) : null, managerScore: null, managerNote: null })
+            .where(and(eq(appraisalScoresTable.appraisalId, appraisalId), eq(appraisalScoresTable.criterionId, Number(critIdStr))));
+        }
+      }
+    }
+
+    if (action === "update_budgets") {
+      if (!["admin", "super_admin", "manager"].includes(req.user!.role)) {
+        res.status(403).json({ error: "Only admins/managers can update budget values" }); return;
+      }
+      if (req.user!.role === "manager") {
+        const isReviewer = await db.select().from(appraisalReviewersTable)
+          .where(and(eq(appraisalReviewersTable.appraisalId, appraisalId), eq(appraisalReviewersTable.reviewerId, req.user!.id)))
+          .limit(1);
+        const teamMembers = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.managerId, req.user!.id));
+        const isManager = teamMembers.some(m => m.id === current.employeeId);
+        if (isReviewer.length === 0 && !isManager) {
+          res.status(403).json({ error: "You can only update budgets for your team members or reviews assigned to you" }); return;
+        }
+      }
+      const { budgetValues: budgetUpdates } = req.body;
+      if (budgetUpdates && typeof budgetUpdates === 'object') {
+        for (const [critIdStr, val] of Object.entries(budgetUpdates)) {
+          await db.update(appraisalScoresTable)
+            .set({ budgetValue: val != null ? String(val) : null })
+            .where(and(eq(appraisalScoresTable.appraisalId, appraisalId), eq(appraisalScoresTable.criterionId, Number(critIdStr))));
+        }
+      }
+    }
 
     if (action === "submit") {
       if (current.status === "self_review") {
