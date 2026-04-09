@@ -365,10 +365,11 @@ router.put("/appraisals/:id", requireAuth, async (req: AuthRequest, res) => {
     const updates: Partial<typeof appraisalsTable.$inferInsert> = {};
 
     if (action === "resend_review") {
-      if (!["admin", "super_admin", "manager"].includes(req.user!.role)) {
-        res.status(403).json({ error: "Only admins/managers can resend for review" }); return;
+      const isEmployee = req.user!.id === current.employeeId;
+      if (!isEmployee && !["admin", "super_admin", "manager"].includes(req.user!.role)) {
+        res.status(403).json({ error: "Only the employee, admins, or managers can resend for review" }); return;
       }
-      if (req.user!.role === "manager") {
+      if (req.user!.role === "manager" && !isEmployee) {
         const isReviewer = await db.select().from(appraisalReviewersTable)
           .where(and(eq(appraisalReviewersTable.appraisalId, appraisalId), eq(appraisalReviewersTable.reviewerId, req.user!.id)))
           .limit(1);

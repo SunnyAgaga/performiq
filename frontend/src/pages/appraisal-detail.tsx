@@ -1137,6 +1137,38 @@ export default function AppraisalDetail() {
         </Card>
       )}
 
+      {/* Request Readjustment — available for employees when their appraisal is beyond self_review */}
+      {user?.id === appraisal.employeeId &&
+        ['manager_review', 'pending_approval'].includes(appraisal.status) && (
+        <Card className="p-6 mb-8 border-amber-200 bg-amber-50/40">
+          <h3 className="text-lg font-bold mb-2 flex items-center gap-2">
+            <RotateCcw className="w-5 h-5 text-amber-600" />
+            Request Readjustment
+          </h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            If you believe the budget values, scores, or feedback need to be corrected, you can request a readjustment.
+            This will send the appraisal back to self-review so you can update your responses.
+          </p>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              className="border-amber-300 text-amber-700 hover:bg-amber-100 gap-2"
+              isLoading={updateMutation.isPending}
+              onClick={() => {
+                if (confirm('Request readjustment? This will return the appraisal to self-review status so you can make changes. All reviewer scores will be reset.')) {
+                  updateMutation.mutate(
+                    { id: appraisalId, data: { action: 'resend_review' } as any },
+                    { onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/appraisals/${appraisalId}`] }) }
+                  );
+                }
+              }}
+            >
+              <RotateCcw className="w-4 h-4" /> Request Readjustment
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {/* Actions */}
       {canEdit && (
         <div className="flex justify-end gap-4 p-4 bg-card border border-border rounded-2xl shadow-lg sticky bottom-6">
