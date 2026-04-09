@@ -34,9 +34,10 @@ export default function AppraisalDetail() {
   const [adminActualValues, setAdminActualValues] = useState<Record<number, string>>({});
   const [savingAdminActuals, setSavingAdminActuals] = useState(false);
   const [showAdminActuals, setShowAdminActuals] = useState(false);
+  const [formInitialized, setFormInitialized] = useState(false);
 
   useEffect(() => {
-    if (appraisal) {
+    if (appraisal && !formInitialized) {
       const initialScores: Record<number, { score: number, note: string, actualValue?: number }> = {};
       const isSelf = appraisal.status === 'self_review';
 
@@ -49,8 +50,9 @@ export default function AppraisalDetail() {
       });
       setScores(initialScores);
       setGeneralComment((isSelf ? appraisal.selfComment : appraisal.managerComment) || "");
+      setFormInitialized(true);
     }
-  }, [appraisal]);
+  }, [appraisal, formInitialized]);
 
   if (isLoading || !appraisal) return <div className="p-8 animate-pulse text-muted-foreground">Loading details...</div>;
 
@@ -121,7 +123,10 @@ export default function AppraisalDetail() {
     updateMutation.mutate(
       { id: appraisalId, data: payload },
       {
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/appraisals/${appraisalId}`] })
+        onSuccess: () => {
+          setFormInitialized(false);
+          queryClient.invalidateQueries({ queryKey: [`/api/appraisals/${appraisalId}`] });
+        }
       }
     );
   };
