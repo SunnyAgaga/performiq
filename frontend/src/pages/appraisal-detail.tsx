@@ -246,6 +246,60 @@ export default function AppraisalDetail() {
         </div>
       </Card>
 
+      {/* Accept All Back-Office Values — employee self-review shortcut */}
+      {isSelfReviewActive && (() => {
+        const valueScorez = appraisal.scores.filter(s => {
+          const t = s.criterion?.type ?? "rating";
+          return (t === "value" || t === "percentage");
+        });
+        const withAdmin = valueScorez.filter(s => {
+          const av = Number(s.adminActualValue ?? (s as Record<string, unknown>).admin_actual_value ?? 0);
+          return av > 0;
+        });
+        if (withAdmin.length === 0) return null;
+        const allAccepted = withAdmin.every(s => {
+          const av = Number(s.adminActualValue ?? (s as Record<string, unknown>).admin_actual_value ?? 0);
+          const ev = scores[s.criterionId]?.actualValue;
+          return ev === av;
+        });
+        return (
+          <Card className="p-5 mb-6 border-green-200 bg-green-50/40">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ShieldCheck className="w-5 h-5 text-green-600 shrink-0" />
+                <div>
+                  <h3 className="text-sm font-bold text-green-800">
+                    {allAccepted ? "All Back-Office Values Accepted" : "Back-Office Values Available"}
+                  </h3>
+                  <p className="text-xs text-green-700 mt-0.5">
+                    {allAccepted
+                      ? "You've accepted all back-office figures. Complete your rating and comments below, then submit your review."
+                      : `${withAdmin.length} criterion value${withAdmin.length > 1 ? "s have" : " has"} been set by back-office. Accept them to proceed, or enter your own counter values below.`}
+                  </p>
+                </div>
+              </div>
+              {!allAccepted && (
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white gap-2 shrink-0"
+                  onClick={() => {
+                    withAdmin.forEach(s => {
+                      const av = Number(s.adminActualValue ?? (s as Record<string, unknown>).admin_actual_value ?? 0);
+                      const crit = s.criterion;
+                      const target = Number(crit?.targetValue ?? 0);
+                      const bv = Number(s.budgetValue ?? (s as Record<string, unknown>).budget_value ?? 0);
+                      handleActualValueChange(s.criterionId, av, target, bv);
+                    });
+                  }}
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Accept All Values
+                </Button>
+              )}
+            </div>
+          </Card>
+        );
+      })()}
+
       {/* Criteria Scoring */}
       <div className="space-y-6 mb-8">
         <h3 className="text-xl font-bold border-b border-border pb-2">Competencies & Criteria</h3>
@@ -318,11 +372,33 @@ export default function AppraisalDetail() {
                           </div>
                         )}
 
+                        {isSelf && adminVal > 0 && (empVal == null || empVal === 0 || empVal === adminVal) && (
+                          <button
+                            type="button"
+                            onClick={() => handleActualValueChange(crit.id, adminVal, target, budget)}
+                            className={`w-full p-3 rounded-lg border text-sm text-left transition-colors ${
+                              empVal === adminVal
+                                ? "border-green-400 bg-green-50 ring-2 ring-green-200"
+                                : "border-blue-300 bg-blue-50/50 hover:bg-blue-100"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className={`w-4 h-4 shrink-0 ${empVal === adminVal ? "text-green-600" : "text-blue-600"}`} />
+                              <span className={`font-semibold ${empVal === adminVal ? "text-green-700" : "text-blue-700"}`}>
+                                {empVal === adminVal ? "Accepted — Back-Office Value" : "Accept Back-Office Value"}
+                              </span>
+                            </div>
+                            {empVal !== adminVal && (
+                              <p className="text-xs text-blue-600 mt-1 ml-6">Click to accept {adminVal.toLocaleString()}{unit ? ` ${unit}` : ""} and proceed with your review</p>
+                            )}
+                          </button>
+                        )}
+
                         {isSelf && (
                           <div>
                             <Label>
                               {adminVal > 0 
-                                ? `Your Counter Value (optional — submit if you disagree with the back-office figure)` 
+                                ? `Your Counter Value (optional — enter only if you disagree with the back-office figure)` 
                                 : critType === "percentage" ? `Actual %${unit ? ` (${unit})` : ""}` : `Actual Value${unit ? ` (${unit})` : ""}`}
                             </Label>
                             <div className="flex items-center gap-2 mt-1">
